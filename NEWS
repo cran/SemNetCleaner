@@ -1,3 +1,29 @@
+Changes in version 0.9.9
+
+o animals.database: a database for animals was added
+
+o animals.misnomer: common misnomers for animals was added
+
+o textcleaner: added database functionality, which makes the cleaning process more accurate, efficient, and reproducible
+
+o several wrapper functions added to aid textcleaning from a database
+
+
+Changes in version 0.1.2
+
+o autoConverge: significantly improved interface
+
+o separated all function files into individual files
+
+o semnetcleaner (changed to textcleaner): added argument to input participants by row or column; ids now included for output; added output to show what spellcheck changed
+
+o destr: improved functionality to allow selection of separating character
+
+o randwalk: added a function to simulate random walks on the network to examine spontaenous spreading activation
+
+o bin2resp: a function to change cleaned binary response data back into character data for each participant
+
+
 Changes in version 0.1.1
 
 o cosine: added cosine similarity

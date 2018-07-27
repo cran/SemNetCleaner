@@ -9,6 +9,6 @@ citEntry(entry = "Manual",
   textVersion  =
   paste("Christensen, A. P. (2018).",
         "SemNetCleaner: An automated cleaning tool for semantic and linguistic data.",
-        "R package version 0.1.0.",
+        "R package version 0.9.9.",
         "Retrieved from github.com/AlexChristensen/SemNetCleaner")
 )
