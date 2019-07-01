@@ -1,9 +1,9 @@
 #' SemNetCleaner--package
-#' @description This package is mainly a wrapper package for functions called in SemNetToolbox.
-#' It implements several functions that automatize the cleaning, removal of plurals and
-#' continuous strings, making the data binary, converging, and finalizing of linguistic
-#' data for semantic network analysis. It also includes databases to make the cleaning process
-#' more accurate, efficient, and reproducible.
+#' @description Implements several functions that automates the cleaning and
+#' spell-checking of text data. Also converges, finalizes, removes plurals and
+#' continuous strings, and puts text data in binary format for semantic network analysis.
+#' Uses the \code{\link{SemNetDictionaries}} package to make
+#' the cleaning process more accurate, efficient, and reproducible.
 #'
 #' @author Alexander Christensen <alexpaulchristensen@gmail.com>
 #' 
