@@ -30,18 +30,28 @@ responses between two binary response matrices (e.g., two groups)
 by only keeping the column names that match between both matrices.
 }
 \examples{
-#finalize rmatA
-finalCmat <- finalize(convmat)
+# Toy example
+raw <- open.animals[c(1:10),-c(1,2)]
 
-#finalize rmatB
-finalRmat <- finalize(rmat)
+# Clean and prepocess data
+clean <- textcleaner(raw, partBY = "row", dictionary = "animals")
 
-#equate rmatA and rmatB
-eq1 <- equate(finalCmat,finalRmat)
+# Obtain binary data
+bin <- clean$binary
 
-#obtain respective equated response matrices
-eqCmat <- eq1$rmatA
-eqRmat <- eq1$rmatB
+# Finalize mat1
+mat1 <- finalize(bin[c(1:5),])
+
+# Finalize mat2
+mat2 <- finalize(bin[c(6:10),])
+
+
+# Equate mat1 and mat1
+eq <- equate(mat1, mat2)
+
+# Obtain respective equated response matrices
+eq.mat1 <- eq$mat1
+eq.mat2 <- eq$mat2
 
 }
 \author{

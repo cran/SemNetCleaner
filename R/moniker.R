@@ -1,24 +1,23 @@
-#' Misnomer Fucntion
+#' Moniker Function
 #' @description A wrapper function for spell-checking
-#' (idnetifies misnomers for a word)
+#' (identifies monikers for a word)
 #' 
-#' @param word Word to check for misnomer
+#' @param word Word to check for moniker
 #' 
-#' @param misnom A list of misnomers.
-#' Only available for "animals" currently.
-#' (see \code{\link[SemNetDictionaries]{animals.misnomer}})
+#' @param misnom A list of monikers.
+#' See \code{\link[SemNetDictionaries]{dictionaries}} for options
 #' 
-#' @return If \code{word} matches a misnomer, then the appropriate word is returned.
-#' If \code{word} does not match a misnomer, then the \code{word} is returned
+#' @return If \code{word} matches a moniker, then the appropriate word is returned.
+#' If \code{word} does not match a moniker, then the \code{word} is returned
 #' 
 #' @examples 
-#' misnomer("possum", SemNetDictionaries::animals.misnomer)
+#' moniker("possum", SemNetDictionaries::animals.moniker)
 #' 
 #' @author Alexander Christensen <alexpaulchristensen@gmail.com>
 #' 
 #' @export
-#Misnomer function
-misnomer <- function (word, misnom)
+#Moniker function
+moniker <- function (word, misnom)
 {
     #unlist possible responses
     mis <- unlist(misnom)
@@ -33,7 +32,7 @@ misnomer <- function (word, misnom)
         misnomed <- gsub("[[:digit:]]+","", matched)
         
     }else{
-        #return word if no misnomer match
+        #return word if no moniker match
         misnomed <- word
     }
         

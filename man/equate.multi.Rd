@@ -7,36 +7,42 @@
 equate.multi(...)
 }
 \arguments{
-\item{...}{A list.
-A list of response matrices to be equated}
+\item{...}{Matrices or data frames.
+Binary response matrices to be equated}
 }
 \value{
 This function returns a list containing the
 equated binary response matrices in the order they were input.
-The response matrices are labeled (\code{1}, \code{2}, \code{...}, \code{n})
-in the order in which they are input.
+The response matrices are labeled as the object name they were
+entered with
 }
 \description{
 A function to apply \code{\link[SemNetCleaner]{equate}}
 to multiple response matrices
 }
 \examples{
-#finalize rmatA
-finalCmat <- finalize(convmat)
+# Toy example
+raw <- open.animals[c(1:10),-c(1,2)]
 
-#finalize rmatB
-finalRmat <- finalize(rmat)
+# Clean and prepocess data
+clean <- textcleaner(raw, partBY = "row", dictionary = "animals")
 
-#finalize rmatC
-finalYmat <- finalize(rmat)
+# Obtain binary data
+bin <- clean$binary
 
-#equate rmatA and rmatB
-eq <- equate.multi(finalCmat,finalRmat,finalYmat)
+# Finalize mat1
+mat1 <- finalize(bin[c(1:5),])
 
-#obtain respective equated response matrices
-eqCmat <- eq$dataset1
-eqRmat <- eq$dataset2
-eqYmat <- eq$dataset3
+# Finalize mat2
+mat2 <- finalize(bin[c(6:10),])
+
+
+# Equate mat1 and mat1
+eq <- equate.multi(mat1, mat2)
+
+# Obtain respective equated response matrices
+eq.mat1 <- eq$mat1
+eq.mat2 <- eq$mat2
 
 }
 \author{
