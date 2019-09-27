@@ -50,7 +50,7 @@ A wrapper function for spell-checking text dictionaries in \code{\link{SemNetDic
 }
 \examples{
 # Toy example
-raw <- open.animals[c(1:10),-c(1,2)]
+raw <- open.animals[c(1:10),-c(1:3)]
 
 if(interactive())
 {

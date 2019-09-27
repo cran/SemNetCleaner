@@ -96,22 +96,22 @@
 #' 
 #' @examples
 #' # Toy example
-#' raw <- open.animals[c(1:10),-c(1,2)]
+#' raw <- open.animals[c(1:10),-c(1:3)]
 #' 
 #' # Clean and prepocess data
 #' clean <- textcleaner(raw, partBY = "row", dictionary = "animals")
 #' 
 #' # Correct changes
 #' if(interactive())
-#' {corr.clean <- corr.chn (clean, old = "rat", dictionary = "animals")}
+#' {corr.clean <- correct.changes(clean, old = "rat", dictionary = "animals")}
 #' 
 #' @author Alexander Christensen <alexpaulchristensen@gmail.com>
 #' 
-#' @importFrom stats na.omit
+#' @importFrom utils menu
 #' 
 #' @export
 #Correct Changes----
-corr.chn <- function(textcleaner.obj, dictionary = NULL, old)
+correct.changes <- function(textcleaner.obj, dictionary = NULL, old)
 {
     #Check for 'textcleaner' object
     if(class(textcleaner.obj)!="textcleaner")
@@ -121,6 +121,10 @@ corr.chn <- function(textcleaner.obj, dictionary = NULL, old)
     if(is.null(dictionary))
     {full.dict <- SemNetDictionaries::load.dictionaries("general")
     }else{full.dict <- SemNetDictionaries::load.dictionaries(dictionary)}
+    
+    #Grab monikers
+    if(any(dictionary %in% SemNetDictionaries::dictionaries()))
+    {misnom <- SemNetDictionaries::load.monikers(dictionary)}
     
     #Unique changes
     uniq <- textcleaner.obj$spellcheck$auto
@@ -164,7 +168,16 @@ corr.chn <- function(textcleaner.obj, dictionary = NULL, old)
                 searcher::search_site(paste("dictionary"," '",word,"'",sep="",collpase=""),
                                       site = "google", rlang = FALSE)
             }else if(ans == 3) #BAD RESPONSE
-            {corr <- NA}
+            {corr <- NA
+            }else if(ans > 3)
+            {
+                #insert response
+                corr <- pot[ans - 3]
+                
+                #check if moniker
+                if(length(misnom)!=0)
+                {corr <- SemNetCleaner::moniker(corr,misnom)}
+            }
         }
         
         #Correct bad resposnes

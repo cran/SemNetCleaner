@@ -40,7 +40,7 @@
 #' 
 #' @examples
 #' # Toy example
-#' raw <- open.animals[c(1:10),-c(1,2)]
+#' raw <- open.animals[c(1:10),-c(1:3)]
 #' 
 #' if(interactive())
 #' {
@@ -59,7 +59,22 @@
 spell.check.dictionary <- function (check, dictionary, part.resp, tolerance = 1)
 {
     #load dictionaries
-    full.dict <- SemNetDictionaries::load.dictionaries(dictionary)
+    if(any(tolower(dictionary) %in% letters))
+    {
+        #letter list
+        let.list <- list()
+        
+        #target letter(s)
+        target.let <- na.omit(match(letters,tolower(dictionary)))
+        
+        #identify target letter(s)
+        for(i in 1:length(target.let))
+        {let.list[[i]] <- SemNetDictionaries::general.dictionary[grep(paste("^",tolower(dictionary)[target.let[i]],sep=""), SemNetDictionaries::general.dictionary)]}
+        
+        #unlist and add to full dictionary
+        full.dict <- sort(unique(c(SemNetDictionaries::load.dictionaries(dictionary[-target.let]),unlist(let.list))))
+    }else{full.dict <- SemNetDictionaries::load.dictionaries(dictionary)}
+    
     orig.dict <- full.dict
     
     #initialize 'from' and 'to' list for changes
@@ -250,10 +265,7 @@ spell.check.dictionary <- function (check, dictionary, part.resp, tolerance = 1)
                                     if(ans4 == 1)
                                     {
                                         #add to dictionary
-                                        suppressWarnings(SemNetDictionaries::append.dictionary(multi.after,save.location="envir"))
-                                        
-                                        #load updated appendix dictionary
-                                        dict <- readRDS(paste(tempdir(),"appendix.dictionary.rds",sep="\\"))
+                                        dict <- suppressWarnings(SemNetDictionaries::append.dictionary(multi.after,save.location="envir"))
                                         
                                         #combined with input dictionary
                                         full.dict <- sort(unique(c(full.dict,dict)))
@@ -339,23 +351,11 @@ spell.check.dictionary <- function (check, dictionary, part.resp, tolerance = 1)
             #identify differences between original dictionary and updated dictionary
             dict <- wcw$dict[which(is.na(match(wcw$dict,orig.dict)))]
             
-            #ask where to save it
-            ans3 <- menu(c("Package","Choose"),"Would you like to save to the package or choose?")
-            
-            if(ans3 == 1)
-            {
-                #create appendix dictionary
-                SemNetDictionaries::append.dictionary(dict,
-                                                      dictionary.name = ans2,
-                                                      save.location = "package")
-            }else if(ans == 2)
-            {
-                #create appendix dictionary
-                SemNetDictionaries::append.dictionary(dict,
-                                                      dictionary.name = ans2,
-                                                      save.location = "choose")
-            }
-            
+            #create appendix dictionary
+            SemNetDictionaries::append.dictionary(dict,
+                                                  dictionary.name = ans2,
+                                                  save.location = "choose",
+                                                  textcleaner = TRUE)
         }else if(ans == 2)
         {
             #let user know that the dictionary data was not saved

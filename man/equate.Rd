@@ -2,36 +2,28 @@
 % Please edit documentation in R/equate.R
 \name{equate}
 \alias{equate}
-\title{Equate Group Responses}
+\title{Equate Groups}
 \usage{
-equate(rmatA, rmatB)
+equate(...)
 }
 \arguments{
-\item{rmatA}{Binary matrix.
-A \link[SemNetCleaner]{textcleaner} filtered response matrix
-for binary matrix A}
-
-\item{rmatB}{Binary matrix. 
-A \link[SemNetCleaner]{textcleaner} filtered response matrix
-for binary matrix B}
+\item{...}{Matrices or data frames.
+Binary response matrices to be equated}
 }
 \value{
-A list containing binary matrices that have matching column
-names (matching response):
-
-\item{rmatA}{Binary matrix with matched responses for \code{rmatA}}
-
-\item{rmatB}{Binary matrix with matched responses for \code{rmatB}}
+This function returns a list containing the
+equated binary response matrices in the order they were input.
+The response matrices are labeled as the object name they were
+entered with
 }
 \description{
-In general, this function serves as a wrapper for
-\code{\link[SemNetCleaner]{equate.multi}}. This function equates the
-responses between two binary response matrices (e.g., two groups)
-by only keeping the column names that match between both matrices.
+A function to "equate" to multiple response matrices.
+\emph{N} number of groups are matched based on their responses so
+that every group has the same responses in their data
 }
 \examples{
 # Toy example
-raw <- open.animals[c(1:10),-c(1,2)]
+raw <- open.animals[c(1:10),-c(1:3)]
 
 # Clean and prepocess data
 clean <- textcleaner(raw, partBY = "row", dictionary = "animals")

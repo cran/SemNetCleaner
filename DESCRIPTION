@@ -1,7 +1,7 @@
 Package: SemNetCleaner
 Title: An Automated Cleaning Tool for Semantic and Linguistic Data
-Version: 1.1.0
-Date: 2019-07-09
+Version: 1.1.1
+Date: 2019-09-27
 Authors@R: c(person("Alexander P.", "Christensen", email = "alexpaulchristensen@gmail.com", role = c("aut", "cre"), comment = c(ORCID = "0000-0002-9798-7037")))
 Maintainer: Alexander P. Christensen <alexpaulchristensen@gmail.com>
 Description: Implements several functions that automates the cleaning and spell-checking of text data. Also converges, finalizes, removes plurals and continuous strings, and puts text data in binary format for semantic network analysis. Uses the 'SemNetDictionaries' package to make the cleaning process more accurate, efficient, and reproducible.
@@ -12,10 +12,11 @@ BugReports: https://github.com/AlexChristensen/SemNetCleaner/issues
 NeedsCompilation: no
 Encoding: UTF-8
 LazyData: true
-Imports: hunspell, searcher, stringdist, tcltk
+Imports: hunspell, searcher, stringdist, tcltk, foreign, readxl,
+        R.matlab
 RoxygenNote: 6.1.1
-Packaged: 2019-08-06 01:13:34 UTC; APCHRIST
+Packaged: 2019-09-27 17:33:08 UTC; apchr
 Author: Alexander P. Christensen [aut, cre]
     (<https://orcid.org/0000-0002-9798-7037>)
 Repository: CRAN
-Date/Publication: 2019-08-06 04:50:03 UTC
+Date/Publication: 2019-09-27 18:50:02 UTC

@@ -1,3 +1,24 @@
+Changes in version 1.1.1
+
+o 'equate' now handles any number of groups ('equate.multi' is defunct and merged into 'equate')
+
+o added a group variable for the dataset 'open.animals'
+
+o removed option to save appendix dictionary to package (not allowed by CRAN policies)
+
+o added a general function to read in common types of data file extensions: 'read.data'
+
+o updated 'textcleaner' to bypass double query for adding a dictionary
+
+o bug fixes in 'textcleaner' and 'spell.check.dictionary'
+
+o updated 'singularize' and 'pluralize' rule sets
+
+o removed 'autoConverge' and 'autoDestr' functions
+
+o changed 'corr.chn' to 'correct.changes'
+
+
 Changes in version 1.1.0
 
 o cleaned up examples and removed unnecessary datasets ('convmat', 'rmat', and 'trial')
@@ -42,6 +63,7 @@ o 'animals.misnomer' was removed
 o 'textcleaner' function code was cleaned up and streamlined. Integrated functionality with the 'SemNetDicationaries' package
 
 o 'autoConverge' function code was cleaned up and streamlined
+
 
 Changes in version 0.9.9
 

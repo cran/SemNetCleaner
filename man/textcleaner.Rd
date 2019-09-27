@@ -124,7 +124,7 @@ to make (you can keep moving through the cleaning process).
 After the cleaning process is through, you can check the \code{spellcheck$unique}
 output of \code{\link[SemNetCleaner]{textcleaner}} to see what changes
 you made. To correct any changes you made in the cleaning process,
-you can use the \code{\link[SemNetCleaner]{corr.chn}} function
+you can use the \code{\link[SemNetCleaner]{correct.changes}} function
 
 NOT RECOMMENDED
 
@@ -134,13 +134,14 @@ you've made up to that point
 }
 \examples{
 # Toy example
-raw <- open.animals[c(1:10),-c(1,2)]
+raw <- open.animals[c(1:10),-c(1:3)]
 
 # Clean and prepocess data
 clean <- textcleaner(raw, partBY = "row", dictionary = "animals")
-\donttest{
-#Full test
-clean <- textcleaner(open.animals[,-1], partBY = "row", dictionary = "animals")
+if(interactive())
+{
+    #Full test
+    clean <- textcleaner(open.animals[,-c(1,2)], partBY = "row", dictionary = "animals")
 }
 
 }

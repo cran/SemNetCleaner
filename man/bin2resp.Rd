@@ -23,7 +23,7 @@ Converts the binary response matrix into characters for each participant
 }
 \examples{
 # Toy example
-raw <- open.animals[c(1:10),-c(1,2)]
+raw <- open.animals[c(1:10),-c(1:3)]
 
 # Clean and prepocess data
 clean <- textcleaner(raw, partBY = "row", dictionary = "animals")

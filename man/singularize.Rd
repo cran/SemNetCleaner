@@ -13,13 +13,51 @@ singularize(word)
 Returns the word in singular form
 }
 \description{
-A function to de-pluralize '-s' and '-es' words. This
-function is very basic and does not have many rules. The function
-simply removes '-s' or '-es' from words.
+A function to change words to their singular form.
+The rules for converting words to their singular forms
+are based on the \strong{\emph{opposite}} of the grammar rules found here:
+\href{https://www.grammarly.com/blog/plural-nouns/}{https://www.grammarly.com/blog/plural-nouns/}.
+This function does not handle special cases, so particular care is necessary.
 }
 \examples{
+# Handles any prototypical cases
+"dog"
+singularize("dogs")
+
 "fox"
 singularize("foxes")
+
+"wolf"
+singularize("wolves")
+
+"octopus"
+singularize("octopi")
+
+"taxon"
+singularize("taxa")
+
+# And most special cases:
+"wife"
+singularize("wives")
+
+"fez"
+singularize("fezzes")
+
+"roof"
+singularize("roofs")
+
+"photo"
+singularize("photos")
+
+# And some irregular cases:
+"child"
+singularize("children")
+
+"tooth"
+singularize("teeth")
+
+"mouse"
+singularize("mice")
 
 }
 \author{
