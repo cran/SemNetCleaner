@@ -3,11 +3,14 @@
 #' The rules for converting words to their plural forms
 #' are based on the grammar rules found here:
 #' \href{https://www.grammarly.com/blog/plural-nouns/}{https://www.grammarly.com/blog/plural-nouns/}.
-#' This function does not handle special cases, so particular care is necessary.
+#' This function handles most special cases and some irregular cases (see examples)
+#' but caution is necessary. If no plural form is identified, then the original
+#' word is returned.
 #' 
 #' @param word A word
 #' 
-#' @return Returns the word in singular form
+#' @return Returns the word in singular form, unless a plural form
+#' could not be found (then the original word is returned)
 #' 
 #' @examples
 #' # Handles any prototypical cases
@@ -171,10 +174,7 @@ pluralize <- function (word)
     }
     
     if(!word %in% checker)
-    {
-        message(paste("An appropriate singular form for",orig.word,"was not found",sep=" "))
-        message("Returning the original word")
-        return(orig.word)
+    {return(orig.word)
     }else{return(word)}
 }
 #----

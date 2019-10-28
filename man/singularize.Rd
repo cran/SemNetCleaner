@@ -10,14 +10,17 @@ singularize(word)
 \item{word}{A word}
 }
 \value{
-Returns the word in singular form
+Returns the word in singular form, unless a singular form
+could not be found (then the original word is returned)
 }
 \description{
 A function to change words to their singular form.
 The rules for converting words to their singular forms
-are based on the \strong{\emph{opposite}} of the grammar rules found here:
+are based on the \strong{\emph{inverse}} of the grammar rules found here:
 \href{https://www.grammarly.com/blog/plural-nouns/}{https://www.grammarly.com/blog/plural-nouns/}.
-This function does not handle special cases, so particular care is necessary.
+This function handles most special cases and some irregular cases (see examples)
+but caution is necessary. If no singular form is identified, then the original
+word is returned.
 }
 \examples{
 # Handles any prototypical cases

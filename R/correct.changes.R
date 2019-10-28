@@ -8,8 +8,8 @@
 #' 
 #' @param textcleaner.obj A \code{\link[SemNetCleaner]{textcleaner}} object
 #' 
-#' @param old Character vector.
-#' A vector of old response(s) to change.
+#' @param incorrect Character vector.
+#' A vector of incorrect response(s) to change.
 #' See the object \code{spellcheck$auto} in
 #' \code{\link[SemNetCleaner]{textcleaner}} output
 #' 
@@ -26,7 +26,7 @@
 #' when mistakes are made, a record can be kept and this function will
 #' allow those mistakes to be amended.
 #' 
-#' Old responses should be used as input. A menu will prompt the user
+#' Incorrect responses should be used as input. A menu will prompt the user
 #' for their decision on how to manage the incorrectly cleaned response.
 #' There are three potential options:
 #' 
@@ -53,19 +53,28 @@
 #' and each column represents a unique response. A response that a participant has provided is a '\code{1}'
 #' and a response that a participant has not provided is a '\code{0}'}
 #'
-#' \item{resposnes}{A response matrix that has been spell-checked and de-pluralized with duplicates removed.
+#' \item{responses}{A list containing two objects:
+#' 
+#' \itemize{
+#' 
+#' \item{clean.resp}
+#' {A response matrix that has been spell-checked and de-pluralized with duplicates removed.
 #' This can be used as a final dataset for analyses (e.g., fluency of responses)}
 #' 
+#' \item{orig.resp}
+#' {The original response matrix that has had white spaces before and
+#' after words response. Also converts all upper-case letters to lower case}
+#' 
+#' }
+#' 
+#' }
+#'
 #' \item{spellcheck}{A list containing three objects:
 #' 
 #' \itemize{
 #' 
 #' \item{\code{full}}
 #' {All responses regardless of spell-checking changes}
-#' 
-#' \item{\code{unique}}
-#' {Only responses that were changed during spell-check (includes
-#' correct responses that were changed to singular form and lower case)}
 #' 
 #' \item{\code{auto}}
 #' {Only the incorrect responses that were changed during spell-check}
@@ -82,7 +91,7 @@
 #' {Identifies removed participants by their row (or column) location in the original data file}
 #' 
 #' \item{\code{ids}}
-#' {Identifies removed participants by their ID (see argument \code{data}}
+#' {Identifies removed participants by their ID (see argument \code{data})}
 #' 
 #' }
 #' 
@@ -103,7 +112,7 @@
 #' 
 #' # Correct changes
 #' if(interactive())
-#' {corr.clean <- correct.changes(clean, old = "rat", dictionary = "animals")}
+#' {corr.clean <- correct.changes(clean, incorrect = "rat", dictionary = "animals")}
 #' 
 #' @author Alexander Christensen <alexpaulchristensen@gmail.com>
 #' 
@@ -111,7 +120,7 @@
 #' 
 #' @export
 #Correct Changes----
-correct.changes <- function(textcleaner.obj, dictionary = NULL, old)
+correct.changes <- function(textcleaner.obj, dictionary = NULL, incorrect)
 {
     #Check for 'textcleaner' object
     if(class(textcleaner.obj)!="textcleaner")
@@ -123,21 +132,21 @@ correct.changes <- function(textcleaner.obj, dictionary = NULL, old)
     }else{full.dict <- SemNetDictionaries::load.dictionaries(dictionary)}
     
     #Grab monikers
-    if(any(dictionary %in% SemNetDictionaries::dictionaries()))
+    if(any(dictionary %in% SemNetDictionaries::dictionaries(TRUE)))
     {misnom <- SemNetDictionaries::load.monikers(dictionary)}
     
     #Unique changes
     uniq <- textcleaner.obj$spellcheck$auto
     
-    #Index old responses
-    ind <- match(old,uniq$from)
+    #Index incorrect responses
+    ind <- match(incorrect,uniq$from)
     
     check <- list()
     
     for(i in 1:length(ind))
     {
         #Potential responses
-        pot <- best.guess(old[i], full.dict)
+        pot <- best.guess(incorrect[i], full.dict)
         
         #Initialize answer
         ans <- 2
@@ -145,12 +154,12 @@ correct.changes <- function(textcleaner.obj, dictionary = NULL, old)
         while(ans == 2)
         {
             #Changed response(s)
-            chn <- uniq[which(uniq$from==old[i]),-1][!is.na(bad.response(uniq[which(uniq$from==old[i]),-1]))]
+            chn <- uniq[which(uniq$from==incorrect[i]),-1][!is.na(bad.response(uniq[which(uniq$from==incorrect[i]),-1]))]
             
             #Print to user
             if(length(chn)>1)
-            {cat("Old response: ",old[i],"\n","Changed response: ",paste("'",chn,"'",sep=""),sep="")
-            }else{cat("Old response: ",old[i],"\n","Changed response: ",chn,sep="")}
+            {cat("From: ",incorrect[i],"\n","To: ",paste("'",chn,"'",sep=""),sep="")
+            }else{cat("From: ",incorrect[i],"\n","To: ",chn,sep="")}
             
             #Ask for correction
             ans <- menu(c("TYPE MY OWN","GOOGLE IT","BAD RESPONSE",pot), title = "\n\nPotential responses:")
@@ -187,37 +196,37 @@ correct.changes <- function(textcleaner.obj, dictionary = NULL, old)
         spellcheck <- textcleaner.obj$spellcheck
         
         #Change auto spelling changes
-        spellcheck$auto[which(spellcheck$auto[,"from"]==old[i]),2:(length(corr)+1)] <- corr
+        spellcheck$auto[which(spellcheck$auto[,"from"]==incorrect[i]),2:(length(corr)+1)] <- corr
         
         #Change NA to ""
         if(any(is.na(spellcheck$auto)))
         {spellcheck$auto[which(is.na(spellcheck$auto),arr.ind=TRUE)] <- ""}
         
         #Change unique spelling changes
-        spellcheck$unique[which(spellcheck$unique[,"from"]==old[i]),2:(length(corr)+1)] <- corr
+        #spellcheck$unique[which(spellcheck$unique[,"from"]==incorrect[i]),2:(length(corr)+1)] <- corr
         
         #Change NA to ""
-        if(any(is.na(spellcheck$unique)))
-        {spellcheck$unique[which(is.na(spellcheck$unique),arr.ind=TRUE)] <- ""}
+        #if(any(is.na(spellcheck$unique)))
+        #{spellcheck$unique[which(is.na(spellcheck$unique),arr.ind=TRUE)] <- ""}
         
         #Change full spelling changes
-        spellcheck$full[which(spellcheck$full[,"from"]==old[i]),2:(length(corr)+1)] <- corr
+        spellcheck$full[which(spellcheck$full[,"from"]==incorrect[i]),2:(length(corr)+1)] <- corr
         
         #Change NA to ""
         if(any(is.na(spellcheck$full)))
         {spellcheck$full[which(is.na(spellcheck$full),arr.ind=TRUE)] <- ""}
         
         #Remove extra corrections
-        if(length(corr)<old[i])
+        if(length(corr)<incorrect[i])
         {
-            #Change old columns to NA
+            #Change incorrect columns to NA
             ##New length
             new.len <- 2:(length(corr)+1)
             
-            ##Replace old responses with NA
-            spellcheck$auto[which(spellcheck$auto[,"from"]==old[i]),-c(1,new.len)] <- ""
-            spellcheck$unique[which(spellcheck$unique[,"from"]==old[i]),-c(1,new.len)] <- ""
-            spellcheck$full[which(spellcheck$full[,"from"]==old[i]),-c(1,new.len)] <- ""
+            ##Replace incorrect responses with NA
+            spellcheck$auto[which(spellcheck$auto[,"from"]==incorrect[i]),-c(1,new.len)] <- ""
+            #spellcheck$unique[which(spellcheck$unique[,"from"]==incorrect[i]),-c(1,new.len)] <- ""
+            spellcheck$full[which(spellcheck$full[,"from"]==incorrect[i]),-c(1,new.len)] <- ""
         }
         
         #Put back into 'spellcheck'
@@ -242,26 +251,26 @@ correct.changes <- function(textcleaner.obj, dictionary = NULL, old)
                 
                 #Search through participants to identify which
                 #participant needs the change
-                if(old[i] %in% partChanges[[j]][,"from"])
+                if(incorrect[i] %in% partChanges[[j]][,"from"])
                 {
                     check[[i]] <- c(i,j)
                     
-                    #Identify old response
-                    target <- which(partChanges[[j]][,"from"]==old[i])
+                    #Identify incorrect response
+                    target <- which(partChanges[[j]][,"from"]==incorrect[i])
                     
-                    #Old target
-                    old.target <- partChanges[[j]][target,-1]
+                    #incorrect target
+                    incorrect.target <- partChanges[[j]][target,-1]
                     
-                    #Idenfity whether duplicates are in the old responses
+                    #Idenfity whether duplicates are in the incorrect responses
                     #or if there is another corrected response
                     rem <- dup.match(textcleaner.obj, j, target)
                     
                     #Change responses that are no not longer given by the
                     #participant to 0
                     if(any(rem))
-                    {textcleaner.obj$binary[j,old.target[rem]] <- 0}
+                    {textcleaner.obj$binary[j,incorrect.target[rem]] <- 0}
                     
-                    #Replace old response
+                    #Replace incorrect response
                     if(length(corr)>ncol(partChanges[[j]]))
                     {
                         #New columns
@@ -280,11 +289,11 @@ correct.changes <- function(textcleaner.obj, dictionary = NULL, old)
                         partChanges[[j]] <- as.data.frame(new.mat,stringsAsFactors = FALSE)
                     }else if(length(corr)<ncol(as.matrix(partChanges[[j]][,-1])))
                     {
-                        #Change old columns to NA
+                        #Change incorrect columns to NA
                         ##New length
                         new.len <- 2:(length(corr)+1)
                         
-                        ##Replace old responses with NA
+                        ##Replace incorrect responses with NA
                         partChanges[[j]][target,-c(1,new.len)] <- NA
                         
                         #Remove NAs in columns function

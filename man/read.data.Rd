@@ -53,7 +53,9 @@ A data frame containing a representation of the data in the file.
 If file extension is ".Rdata", then data will be read to the global environment
 }
 \description{
-A single function to read in common data file extensions
+A single function to read in common data file extensions.
+Note that this function is specialized for reading in text data in the
+format necessary for functions in SemNetCleaner
 
 File extensions supported:
 \itemize{
@@ -84,16 +86,19 @@ read.data(tf)
 }
 \references{
 # R Core Team
+
 R Core Team (2019). R: A language and environment for
 statistical computing. R Foundation for Statistical Computing,
 Vienna, Austria. URL https://www.R-project.org/.
 
 # readxl
+
 Hadley Wickham and Jennifer Bryan (2019). readxl: Read Excel
 Files. R package version 1.3.1.
 https://CRAN.R-project.org/package=readxl
 
 # R.matlab
+
 Henrik Bengtsson (2018). R.matlab: Read and Write MAT Files
 and Call MATLAB from Within R. R package version 3.6.2.
 https://CRAN.R-project.org/package=R.matlab

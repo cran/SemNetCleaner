@@ -4,7 +4,7 @@
 \alias{correct.changes}
 \title{Correct Changes from \code{\link[SemNetCleaner]{textcleaner}}}
 \usage{
-correct.changes(textcleaner.obj, dictionary = NULL, old)
+correct.changes(textcleaner.obj, dictionary = NULL, incorrect)
 }
 \arguments{
 \item{textcleaner.obj}{A \code{\link[SemNetCleaner]{textcleaner}} object}
@@ -14,8 +14,8 @@ Can be a vector of a corpus or any text for comparison.
 Dictionary to be used for more efficient text cleaning.
 Defaults to \code{NULL}, which will use \code{\link[SemNetDictionaries]{general.dictionary}}}
 
-\item{old}{Character vector.
-A vector of old response(s) to change.
+\item{incorrect}{Character vector.
+A vector of incorrect response(s) to change.
 See the object \code{spellcheck$auto} in
 \code{\link[SemNetCleaner]{textcleaner}} output}
 }
@@ -28,8 +28,21 @@ have been corrected with the user-provided changes:
 and each column represents a unique response. A response that a participant has provided is a '\code{1}'
 and a response that a participant has not provided is a '\code{0}'}
 
-\item{resposnes}{A response matrix that has been spell-checked and de-pluralized with duplicates removed.
+\item{responses}{A list containing two objects:
+
+\itemize{
+
+\item{clean.resp}
+{A response matrix that has been spell-checked and de-pluralized with duplicates removed.
 This can be used as a final dataset for analyses (e.g., fluency of responses)}
+
+\item{orig.resp}
+{The original response matrix that has had white spaces before and
+after words response. Also converts all upper-case letters to lower case}
+
+}
+
+}
 
 \item{spellcheck}{A list containing three objects:
 
@@ -37,10 +50,6 @@ This can be used as a final dataset for analyses (e.g., fluency of responses)}
 
 \item{\code{full}}
 {All responses regardless of spell-checking changes}
-
-\item{\code{unique}}
-{Only responses that were changed during spell-check (includes
-correct responses that were changed to singular form and lower case)}
 
 \item{\code{auto}}
 {Only the incorrect responses that were changed during spell-check}
@@ -57,7 +66,7 @@ correct responses that were changed to singular form and lower case)}
 {Identifies removed participants by their row (or column) location in the original data file}
 
 \item{\code{ids}}
-{Identifies removed participants by their ID (see argument \code{data}}
+{Identifies removed participants by their ID (see argument \code{data})}
 
 }
 
@@ -85,7 +94,7 @@ not make sense to stop and start the text cleaning process over. Rather
 when mistakes are made, a record can be kept and this function will
 allow those mistakes to be amended.
 
-Old responses should be used as input. A menu will prompt the user
+Incorrect responses should be used as input. A menu will prompt the user
 for their decision on how to manage the incorrectly cleaned response.
 There are three potential options:
 
@@ -113,7 +122,7 @@ clean <- textcleaner(raw, partBY = "row", dictionary = "animals")
 
 # Correct changes
 if(interactive())
-{corr.clean <- correct.changes(clean, old = "rat", dictionary = "animals")}
+{corr.clean <- correct.changes(clean, incorrect = "rat", dictionary = "animals")}
 
 }
 \author{
