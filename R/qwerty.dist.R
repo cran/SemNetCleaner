@@ -22,14 +22,19 @@
 #' #Different distances for QWERTY
 #' qwerty.dist("big", "pig")
 #' 
-#' qwerty.dist("big", "bug") # Probably meant to type "bug"
+#' qwerty.dist("big", "bug") # Probably meant to type "bug" 
 #' 
 #' @author Alexander Christensen <alexpaulchristensen@gmail.com>
 #' 
 #' @export
 #QWERTY Distance----
+#Updated 14.02.2020
 qwerty.dist <- function(wordA, wordB)
 {
+    # Remove diacritic characters
+    wordA <- stringi::stri_trans_general(wordA, "Latin-ASCII")
+    wordB <- stringi::stri_trans_general(wordB, "Latin-ASCII")
+    
     if(nchar(wordA)==nchar(wordB))
     {
         #Keyboard structure

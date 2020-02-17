@@ -1,3 +1,14 @@
+Changes in version 1.1.4
+
+o diacritic characters bug fux in `qwerty.dist`
+
+o temporary bug fix in `correct.changes` (see code)
+
+o removed progress bar for Macs and Linux -- will work on progress bar solution at a later time
+
+o fixed diacritic character error for Macs
+
+
 Changes in version 1.1.3
 
 o fixed fatal bug in `correct.changes`
