@@ -1,3 +1,10 @@
+Changes in version 1.1.5
+
+o FIX: `read.data` bug for .csv files
+
+o FIX: NA bug in `textcleaner`
+
+
 Changes in version 1.1.4
 
 o diacritic characters bug fux in `qwerty.dist`

@@ -195,6 +195,8 @@ textcleaner <- function(data, miss = 99,
 
     #remove bad responses
     data <- apply(mat.dat,1:2,bad.response)
+    #change NAs in data to ""
+    data <- ifelse(is.na(data),"",data)
     #make trim white space again
     data <- apply(apply(data,2,trimws),1:2,rm.lead.space)
     #and make all lower case
@@ -204,13 +206,8 @@ textcleaner <- function(data, miss = 99,
     data <- as.data.frame(data, stringsAsFactors = FALSE)
     duplicate <- data
     
-    #change NAs in data to ""
-    data <- as.matrix(data)
-    data <- ifelse(is.na(data),"",data)
-    data <- as.data.frame(data, stringsAsFactors = FALSE)
-    
     #unique responses for efficient spell-checking
-    check <- unique(unlist(data))
+    check <- na.omit(unique(unlist(data)))
     
     #############################
     #### MAIN FUNCTION BEGIN ####
@@ -401,7 +398,7 @@ textcleaner <- function(data, miss = 99,
   for(i in 1:length(ids))
   {
     # Target diff
-    target.diff <- unlist(setdiff(data[i,],duplicate[i,]))
+    target.diff <- na.omit(unlist(setdiff(data[i,],duplicate[i,])))
     
     if(length(target.diff)!=0)
     {

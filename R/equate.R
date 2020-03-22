@@ -56,7 +56,7 @@ equate <- function(...)
         return(list(rmatA=rmatA,rmatB=rmatB))
     }
     
-    name <- as.character(substitute(list(...)))
+    name <- as.character(substitute(...))
     name <- name[-which(name=="list")]
     
     datalist <- list(...)
