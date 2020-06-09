@@ -15,11 +15,14 @@
 #' # Toy example
 #' raw <- open.animals[c(1:10),-c(1:3)]
 #' 
-#' # Clean and prepocess data
-#' clean <- textcleaner(raw, partBY = "row", dictionary = "animals")
+#' if(interactive())
+#' {
+#'   # Clean and prepocess data
+#'   clean <- textcleaner(open.animals[,-c(1:2)], partBY = "row", dictionary = "animals")
 #' 
-#' # Change binary response matrix to word response matrix
-#' charmat <- bin2resp(clean$binary)
+#'   # Change binary response matrix to word response matrix
+#'   charmat <- bin2resp(clean$responses$binary)
+#' }
 #' 
 #' @author Alexander Christensen <alexpaulchristensen@gmail.com>
 #' 
@@ -77,6 +80,7 @@ bin2resp <- function (rmat, to.data.frame = FALSE)
         
         part <- as.data.frame(part.df)
         colnames(part) <- row.names(rmat)
+        part <- t(part)
     }
     
     return(part)
