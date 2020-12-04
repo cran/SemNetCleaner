@@ -211,14 +211,17 @@ bad.response <- function (word, ...)
 #' @param dictionary Character vector.
 #' A dictionary to look for word in (see \code{\link{SemNetDictionaries}})
 #' 
+#' @param spelling Character.
+#' Either \code{"UK"} or \code{"US"} for their respective spelling
+#' 
 #' @return Either a string that's been spell-corrected or the original string
 #' 
 #' @author Alexander Christensen <alexpaulchristensen@gmail.com>
 #' 
 #' @noRd
 # Individual Word Spell-Checker----
-# Updated 10.04.2020
-ind.word.check <- function (string, full.dict, dictionary)
+# Updated 28.11.2020
+ind.word.check <- function (string, full.dict, dictionary, spelling)
 {
   # Split string
   spl <- unlist(strsplit(string," "))
@@ -242,7 +245,7 @@ ind.word.check <- function (string, full.dict, dictionary)
   # Re-check for misnomers
   # Check if any dictionaries were improted from SemNetDictionaries
   if(any(dictionary %in% SemNetDictionaries::dictionaries(TRUE)))
-  {resp <- moniker(word = resp, misnom = SemNetDictionaries::load.monikers(dictionary))}
+  {resp <- moniker(word = resp, misnom = SemNetDictionaries::load.monikers(dictionary), spelling = spelling)}
   
   return(resp)
 }
@@ -257,6 +260,9 @@ ind.word.check <- function (string, full.dict, dictionary)
 #' @param misnom A list of monikers.
 #' See \code{\link[SemNetDictionaries]{dictionaries}} for options
 #' 
+#' @param spelling Character.
+#' Either \code{"UK"} or \code{"US"} for their respective spelling
+#' 
 #' @return If \code{word} matches a moniker, then the appropriate word is returned.
 #' If \code{word} does not match a moniker, then the \code{word} is returned
 #' 
@@ -264,8 +270,8 @@ ind.word.check <- function (string, full.dict, dictionary)
 #' 
 #' @noRd
 # Moniker----
-# Updated 10.04.2020
-moniker <- function (word, misnom)
+# Updated 28.11.2020
+moniker <- function (word, misnom, spelling)
 {
   #unlist possible responses
   mis <- unlist(misnom)
@@ -284,6 +290,9 @@ moniker <- function (word, misnom)
     misnomed <- word
   }
   
+  #convert between UK-US spelling
+  misnomed <- brit.us.conv(vec = misnomed, spelling = spelling, dictionary = FALSE)
+  
   return(misnomed)
 }
 
@@ -295,11 +304,17 @@ moniker <- function (word, misnom)
 #' @param vec Character vector.
 #' A vector with words to potentially be de-combined
 #' 
+#' @param multi.min Numeric.
+#' Length of multiple word resposnes in the dictionary
+#' 
 #' @param full.dict Character vector.
 #' Dictionary entries
 #' 
 #' @param dictionary Character vector.
 #' A dictionary to look for word in (see \code{\link{SemNetDictionaries}})
+#' 
+#' @param spelling Character.
+#' Either \code{"UK"} or \code{"US"} for their respective spelling
 #' 
 #' @return A vector with responses de-combined based on dictionary entries
 #' 
@@ -309,20 +324,14 @@ moniker <- function (word, misnom)
 #' 
 #' @noRd
 # Multiple words----
-# Updated 11.04.2020
-multiple.words <- function (vec, full.dict, dictionary)
+# Updated 01.12.2020
+multiple.words <- function (vec, multi.min, full.dict, dictionary, spelling)
 {
   # Split vector
   spl <- unlist(strsplit(vec, " "))
   
   # Remove bad responses
   spl <- na.omit(bad.response(spl))
-  
-  # Multiple word responses greater than in dictionary
-  dict.lens <- unlist(lapply(full.dict, function(x){length(unlist(strsplit(x, " ")))}))
-  
-  # Set multiple word minimum in response to be considered for split
-  multi.min <- ceiling(median(dict.lens) + 2 * sd(dict.lens))
   
   # Check for multiple words
   if(length(spl) >= multi.min)
@@ -356,7 +365,7 @@ multiple.words <- function (vec, full.dict, dictionary)
         spacing <- c(paste(spl[i-1], spl[i]), paste(spl[i-1], spl[i], sep = ""))
         
         ### Convert monikers
-        spacing <- unique(unlist(lapply(spacing, moniker, dictionary)))
+        spacing <- unique(unlist(lapply(spacing, moniker, dictionary, spelling = spelling)))
         
         ### Check for only one solution
         if(sum(spacing %in% full.dict) == 1)
@@ -369,7 +378,7 @@ multiple.words <- function (vec, full.dict, dictionary)
         spacing <- c(paste(spl[i], spl[i+1]), paste(spl[i], spl[i+1], sep = ""))
         
         ### Convert monikers
-        spacing <- unique(unlist(lapply(spacing, moniker, dictionary)))
+        spacing <- unique(unlist(lapply(spacing, moniker, dictionary, spelling = spelling)))
         
         ### Check for only one solution
         if(sum(spacing %in% full.dict) == 1)
@@ -396,7 +405,7 @@ multiple.words <- function (vec, full.dict, dictionary)
     }
     
     # Check for common misspellings and monikers
-    vec <- unlist(lapply(spl, moniker, misnom = SemNetDictionaries::load.monikers(dictionary)))
+    vec <- unlist(lapply(spl, moniker, misnom = SemNetDictionaries::load.monikers(dictionary), spelling = spelling))
   }else if(length(spl) > 1)
   {
     # Correct if only one best guess exists
@@ -455,6 +464,110 @@ response.splitter <- function (vec, full.dict)
   }else{return(vec)}
 }
 
+#' British-US English Conversion (Vector)
+#' 
+#' @description A sub-routine function to convert English spelling
+#' 
+#' @param vec Character vector.
+#' A vector with words to be checked for English spelling
+#' 
+#' @param spelling Character.
+#' Either \code{"UK"} or \code{"US"} for their respective spelling
+#' 
+#' @param dictionary Boolean.
+#' If \code{TRUE}, then duplicates are removed and the words are alphabetized
+#' 
+#' @return British or US spellings of words
+#' 
+#' @author Alexander Christensen <alexpaulchristensen@gmail.com>
+#' 
+#' @noRd
+# British-US Conversion (Vector)----
+# Updated 27.11.2020
+brit.us.conv.vector <- function (vec, spelling = c("UK", "US"), dictionary = FALSE)
+{
+  if(toupper(spelling) == "UK"){
+    
+    # Check for any US spelling in the vector
+    if(any(vec %in% names(SemNetDictionaries::brit2us))){
+      
+      # Target US spelling
+      target.US <- which(!is.na(vec[match(names(SemNetDictionaries::brit2us), vec)]))
+      
+      # Get GB spelling
+      spelling.GB <- unname(unlist(SemNetDictionaries::brit2us[target.US]))
+    
+      # Change US to GB
+      vec[na.omit(match(names(SemNetDictionaries::brit2us), vec))] <- spelling.GB
+      
+    }
+    
+    
+  }else if(toupper(spelling) == "US"){
+    
+    # Check for any GB spelling in the vector
+    if(any(vec %in% SemNetDictionaries::brit2us)){
+      
+      # Target GB spelling
+      target.GB <- which(!is.na(vec[match(SemNetDictionaries::brit2us, vec)]))
+      
+      # Get US spelling
+      spelling.US <- names(unlist(SemNetDictionaries::brit2us[target.GB]))
+      
+      # Change US to GB
+      vec[na.omit(match(SemNetDictionaries::brit2us, vec))] <- spelling.US
+      
+    }
+    
+  }
+  
+  # Remove duplicates and alphabetize
+  if(dictionary){
+    vec <- sort(unique(vec))
+  }
+  
+  return(vec)
+}
+
+#' British-US English Conversion (List)
+#' 
+#' @description A sub-routine function to convert English spelling
+#' 
+#' @param vec Character vector.
+#' A vector with words to be checked for English spelling
+#' 
+#' @param spelling Character.
+#' Either \code{"UK"} or \code{"US"} for their respective spelling
+#' 
+#' @return British or US spellings of words
+#' 
+#' @author Alexander Christensen <alexpaulchristensen@gmail.com>
+#' 
+#' @noRd
+# British-US Conversion----
+# Updated 27.11.2020
+brit.us.conv <- function (vec, spelling = c("UK", "US"), dictionary)
+{
+
+  vec <- unlist(lapply(vec, strsplit, split = " "), recursive = FALSE)
+  
+  vec <- lapply(vec, function(x, spelling, dictionary){
+    
+    converted <- brit.us.conv.vector(x, spelling = spelling)
+    
+    conv <- paste(converted, collapse = " ")
+    
+    return(conv)
+    
+  }, spelling = spelling, dictionary = dictionary)
+  
+  if(dictionary){
+    vec <- sort(unlist(vec))
+  }
+  
+  return(vec)
+}
+
 #' Identifies words that are already spelled correctly and automatically
 #' spell corrects responses
 #' 
@@ -470,6 +583,9 @@ response.splitter <- function (vec, full.dict)
 #' @param dictionary Character.
 #' A dictionary to look for word in (see \code{\link{SemNetDictionaries}})
 #' 
+#' @param spelling Character.
+#' Either \code{"UK"} or \code{"US"} for their respective spelling
+#' 
 #' @return A list containing:
 #' 
 #' \item{incorrect}{Indices corresponding to responses that need to
@@ -481,8 +597,8 @@ response.splitter <- function (vec, full.dict)
 #' 
 #' @noRd
 # Automated Spell-check----
-# Updated 10.04.2020
-auto.spellcheck <- function(check, full.dict, dictionary)
+# Updated 01.12.2020
+auto.spellcheck <- function(check, full.dict, dictionary, spelling)
 {
   # Change names of indices
   names(check) <- formatC(1:length(check),
@@ -549,55 +665,63 @@ auto.spellcheck <- function(check, full.dict, dictionary)
   ## Correct common misspellings and monikers ##
   #--------------------------------------------#
   
-  # Let user know
-  message("\nAuto-correcting common misspellings and monikers...", appendLF = FALSE)
-  
-  # Check if any dictionaries were improted from SemNetDictionaries
-  if(any(dictionary %in% SemNetDictionaries::dictionaries(TRUE)))
-  {
-    # Load moniker
-    monik <- SemNetDictionaries::load.monikers(dictionary)
+  if(all(dictionary == "general")){
     
-    if(length(monik)!=0) # Checks in case of only using general dictionary
+    mons <- sing
+    
+  }else{
+    
+    # Let user know
+    message("\nAuto-correcting common misspellings and monikers...", appendLF = FALSE)
+    
+    # Check if any dictionaries were improted from SemNetDictionaries
+    if(any(dictionary %in% SemNetDictionaries::dictionaries(TRUE)))
     {
-      ## Check for monikers
-      mons <- lapply(sing, moniker, monik)
+      # Load moniker
+      monik <- SemNetDictionaries::load.monikers(dictionary)
       
-      ## Identify responses found in dictionary
-      ind3 <- which(!is.na(match(unlist(mons),full.dict)))
-      
-      ## Update original responses
-      orig[names(mons)[ind3]] <- mons[ind3]
-      
-      ## Update correctly spelled indices
-      names.ind <- sort(c(names.ind, names(mons)[ind3]))
-      
-      ## Update singularized responses
-      mons <- orig[-as.numeric(names.ind)]
-      
-      ## Check for pluralized monikers
-      mons <- lapply(mons, function(x, monik){moniker(singularize(x), monik)}, monik)
-      
-      ## Identify responses found in dictionary
-      ind4 <- which(!is.na(match(unlist(mons),full.dict)))
-      
-      ## Update original responses
-      orig[names(mons)[ind4]] <- mons[ind4]
-      
-      ## Update correctly spelled indices
-      names.ind <- sort(c(names.ind, names(mons)[ind4]))
-      
-      ## Update singularized responses
-      mons <- orig[-as.numeric(names.ind)]
-      
+      if(length(monik)!=0) # Checks in case of only using general dictionary
+      {
+        ## Check for monikers
+        mons <- unlist(lapply(sing, moniker, monik, spelling = spelling), recursive = FALSE)
+        
+        ## Identify responses found in dictionary
+        ind3 <- which(!is.na(match(unlist(mons),full.dict)))
+        
+        ## Update original responses
+        orig[names(mons)[ind3]] <- mons[ind3]
+        
+        ## Update correctly spelled indices
+        names.ind <- sort(c(names.ind, names(mons)[ind3]))
+        
+        ## Update singularized responses
+        mons <- orig[-as.numeric(names.ind)]
+        
+        ## Check for pluralized monikers
+        mons <- unlist(lapply(mons, function(x, monik, spelling){moniker(singularize(x), monik, spelling)}, monik, spelling = spelling), recursive = FALSE)
+        
+        ## Identify responses found in dictionary
+        ind4 <- which(!is.na(match(unlist(mons),full.dict)))
+        
+        ## Update original responses
+        orig[names(mons)[ind4]] <- mons[ind4]
+        
+        ## Update correctly spelled indices
+        names.ind <- sort(c(names.ind, names(mons)[ind4]))
+        
+        ## Update singularized responses
+        mons <- orig[-as.numeric(names.ind)]
+        
+      }
     }
+    
+    # Add artificial pause for smoother feel
+    Sys.sleep(0.50)
+    
+    # Let user know
+    message("done.")
+    
   }
-  
-  # Add artificial pause for smoother feel
-  Sys.sleep(0.50)
-  
-  # Let user know
-  message("done.")
   
   #------------------------------#
   ## Individualized spell-check ##
@@ -607,7 +731,7 @@ auto.spellcheck <- function(check, full.dict, dictionary)
   message(paste("\nAttempting to auto-correct the remaining", length(mons),"responses individually..."), appendLF = FALSE)
   
   # Spell-check each individual word within the list (including multiple word responses)
-  ind.check <- lapply(mons, ind.word.check, full.dict = full.dict, dictionary = dictionary)
+  ind.check <- unlist(lapply(mons, ind.word.check, full.dict = full.dict, dictionary = dictionary, spelling = spelling), recursive = FALSE)
   
   ## Identify responses found in dictionary
   ind5 <- which(!is.na(match(unlist(ind.check),full.dict)))
@@ -631,8 +755,19 @@ auto.spellcheck <- function(check, full.dict, dictionary)
   # Let user know
   message("\nParsing multi-word responses...", appendLF = FALSE)
   
+  # Multiple word responses greater than in dictionary
+  dict.lens <- unlist(lapply(full.dict, function(x){length(unlist(strsplit(x, " ")))}))
+  
+  # Set multiple word minimum in response to be considered for split
+  multi.min <- ceiling(median(dict.lens) + 2 * sd(dict.lens))
+  
+  # Check for minimum length of 1
+  if(multi.min == 1){
+    multi.min <- 2
+  }
+  
   # Search through responses with more than minimum words (varies based on dictionary)
-  multi.word <- lapply(ind.check, multiple.words, full.dict = full.dict, dictionary = dictionary)
+  multi.word <- lapply(ind.check, multiple.words, multi.min = multi.min, full.dict = full.dict, dictionary = dictionary, spelling = spelling)
   
   ## Identify responses found in dictionary
   ### Check responses that changed
@@ -1043,7 +1178,7 @@ customMenu <- function (choices, title = NULL, default, dictionary = FALSE, help
 #' @noRd
 #' 
 # Menu for Manual Spell-check----
-# Updated 07.09.2020
+# Updated 27.11.2020
 spellcheck.menu <- function (check, context = NULL, possible, original,
                              current.index, changes, full.dictionary, category)
 {
@@ -1062,9 +1197,9 @@ spellcheck.menu <- function (check, context = NULL, possible, original,
     while(ans == 30)
     {
       # Title for spell-check
-      title <- paste(paste("\nOriginal response: ", "'", original, "'", sep = ""),
-                     paste("Auto-corrected response: ", paste("'", context, "'", sep = "", collapse = " "), sep = ""),
-                     paste("Response to manually spell-check: ", paste("'", colortext(context[check], defaults = "highlight"), "'", sep = ""), sep = ""),
+      title <- paste(paste("\nOriginal string: ", "'", original, "'", sep = ""),
+                     paste("Auto-corrected string: ", paste("'", context, "'", sep = "", collapse = " "), sep = ""),
+                     paste("Target word: ", paste("'", colortext(context[check], defaults = "highlight"), "'", sep = ""), sep = ""),
                      sep = "\n\n")
       
       # Choices for spell-check
@@ -1377,7 +1512,7 @@ spellcheck.menu <- function (check, context = NULL, possible, original,
     while(ans == 30)
     {
       # Title for spell-check
-      title <- paste(paste("\nResponse to manually spell-check: ", paste("'", colortext(check, defaults = "highlight"), "'", sep = ""), sep = ""))
+      title <- paste(paste("\nTarget word: ", paste("'", colortext(check, defaults = "highlight"), "'", sep = ""), sep = ""))
       
       # Choices for spell-check
       choices <- c("SKIP", "ADD TO DICTIONARY", "TYPE MY OWN", "GOOGLE IT", "BAD WORD", possible)
@@ -1567,7 +1702,7 @@ spellcheck.menu <- function (check, context = NULL, possible, original,
 error.fun <- function(result, SUB_FUN, FUN)
 {
   # Let user know that an error has occurred
-  message(paste("\nAn error has occured in the '", SUB_FUN, "' function of '", FUN, "':\n", sep =""))
+  message(paste("\nAn error has occurred in the '", SUB_FUN, "' function of '", FUN, "':\n", sep =""))
   
   # Give them the error to send to you
   cat(paste(result))
@@ -1587,7 +1722,7 @@ error.fun <- function(result, SUB_FUN, FUN)
   
   # To reproduce
   message(styletext("To Reproduce:", defaults = "bold"))
-  message(paste(" ", textsymbol("bullet"), " Function error occured in: ", SUB_FUN, " function of ", FUN, sep = ""))
+  message(paste(" ", textsymbol("bullet"), " Function error occurred in: ", SUB_FUN, " function of ", FUN, sep = ""))
   
   # R, SemNetCleaner, and SemNetDictionaries
   message(styletext("\nR, SemNetCleaner, and SemNetDictionaries versions:", defaults = "bold"))
@@ -1611,6 +1746,19 @@ error.fun <- function(result, SUB_FUN, FUN)
 #' 
 #' @param dictionary Character vector.
 #' See \code{\link{SemNetDictionaries}}
+#' 
+#' @param spelling Character vector.
+#' English spelling to be used.
+#' \itemize{
+#' 
+#' \item{\code{"UK"}}
+#' {For British spelling (e.g., colour)}
+#' 
+#' \item{\code{"US"}}
+#' {For American spelling (e.g., color)}
+#' 
+#' }
+#' 
 #' 
 #' @param add.path Character.
 #' Path to additional dictionaries to be found.
@@ -1660,10 +1808,10 @@ error.fun <- function(result, SUB_FUN, FUN)
 #' @import SemNetDictionaries
 #' 
 #' @noRd
-# Manual spell-check----
-# Updated 07.09.2020
-spellcheck.dictionary <- function (uniq.resp = NULL, dictionary = NULL, add.path = NULL,
-                                   data = NULL, continue = NULL#, walkthrough = NULL
+# MANUAL spell-check----
+# Updated 01.12.2020
+spellcheck.dictionary <- function (uniq.resp = NULL, dictionary = NULL, spelling = NULL,
+                                   add.path = NULL, data = NULL, continue = NULL#, walkthrough = NULL
                                    )
 {
   # Line break function
@@ -1703,18 +1851,27 @@ spellcheck.dictionary <- function (uniq.resp = NULL, dictionary = NULL, add.path
     ## Full dictionary
     full.dictionary <- SemNetDictionaries::load.dictionaries(dictionary, add.path = add.path)
     
-    ## Save original dictionary (to comparse against later)
+    ## English conversion
+    message(paste("\nConverting dictionary to '", spelling, "' spelling...", sep = ""), appendLF = FALSE)
+    full.dictionary <- brit.us.conv(full.dictionary, spelling = spelling, dictionary = TRUE)
+    message("done")
+    
+    ## Save original dictionary (to compare against later)
     orig.dictionary <- full.dictionary
     
-    # Initialize 'from' and 'to' list for changes
+    # Initialize 'from' list
     from <- as.list(uniq.resp)
+    ## English conversion
+    #from <- brit.us.conv(from, spelling = spelling, dictionary = FALSE)
+    # Initialize 'to' list for changes
     to <- from
     
     # Perform initial spell-check
     initial <- try(
       auto.spellcheck(check = from,
                       full.dict = full.dictionary,
-                      dictionary = dictionary),
+                      dictionary = dictionary,
+                      spelling = spelling),
       silent = TRUE
     )
     
@@ -1756,6 +1913,7 @@ spellcheck.dictionary <- function (uniq.resp = NULL, dictionary = NULL, add.path
     dictionary <- continue$dictionary
     full.dictionary <- continue$full.dictionary
     orig.dictionary <- continue$orig.dictionary
+    spelling <- continue$spelling
     category <- continue$category
     from <- continue$from
     to <- continue$to
@@ -1836,6 +1994,7 @@ spellcheck.dictionary <- function (uniq.resp = NULL, dictionary = NULL, add.path
           res$dictionary <- dictionary
           res$full.dictionary <- full.dictionary
           res$orig.dictionary <- orig.dictionary
+          res$spelling <- spelling
           res$category <- category
           res$from <- from
           res$to <- to
@@ -1870,6 +2029,7 @@ spellcheck.dictionary <- function (uniq.resp = NULL, dictionary = NULL, add.path
           res$dictionary <- dictionary
           res$full.dictionary <- full.dictionary
           res$orig.dictionary <- orig.dictionary
+          res$spelling <- spelling
           res$category <- category
           res$from <- from
           res$to <- to
@@ -1936,7 +2096,7 @@ spellcheck.dictionary <- function (uniq.resp = NULL, dictionary = NULL, add.path
               message("\nThis is the first response. 'GO BACK' is not available.")
               
               # Add artificial pause for smoother feel
-              Sys.sleep(1)
+              Sys.sleep(0.5)
             }
           }else{
             
@@ -1972,9 +2132,14 @@ spellcheck.dictionary <- function (uniq.resp = NULL, dictionary = NULL, add.path
           changes <- result$changes
           full.dictionary <- result$full.dictionary
           
+          ## Check for BAD STRING
+          if(all(target == "NA")){
+            result$end <- TRUE
+          }
+          
           ## Increase multiple response count
-          if(result$end)
-          {multi.count <- length(check.words) + 1
+          if(result$end){
+            multi.count <- length(check.words) + 1
           }else{multi.count <- multi.count + 1}
         }
         
@@ -2012,6 +2177,7 @@ spellcheck.dictionary <- function (uniq.resp = NULL, dictionary = NULL, add.path
         res$dictionary <- dictionary
         res$full.dictionary <- full.dictionary
         res$orig.dictionary <- orig.dictionary
+        res$spelling <- spelling
         res$category <- category
         res$from <- from
         res$to <- to
@@ -2046,6 +2212,7 @@ spellcheck.dictionary <- function (uniq.resp = NULL, dictionary = NULL, add.path
         res$dictionary <- dictionary
         res$full.dictionary <- full.dictionary
         res$orig.dictionary <- orig.dictionary
+        res$spelling <- spelling
         res$category <- category
         res$from <- from
         res$to <- to
@@ -2109,7 +2276,7 @@ spellcheck.dictionary <- function (uniq.resp = NULL, dictionary = NULL, add.path
           message("This is the first response. 'GO BACK' is not available.")
           
           # Add artificial pause for smoother feel
-          Sys.sleep(1)
+          Sys.sleep(0.5)
         }
         
       }else{
@@ -2225,8 +2392,9 @@ spellcheck.dictionary <- function (uniq.resp = NULL, dictionary = NULL, add.path
     
     ## Check for monikers
     for(i in 1:length(to))
-      for(j in 1:length(to[[i]]))
-      {to[[i]][j] <- moniker(to[[i]][j], SemNetDictionaries::load.monikers(target))}
+      for(j in 1:length(to[[i]])){
+        to[[i]][j] <- unlist(moniker(to[[i]][j], SemNetDictionaries::load.monikers(target), spelling = spelling))
+      }
     
     ## Let user know
     message("done")
@@ -3013,16 +3181,16 @@ textcleaner_help <- function(check, context, original, possible)
   
   if(!is.null(context))
   {
-    cat(paste("\n", "Original response:\n\n",
+    cat(paste("\n", "Original string:\n\n",
               paste("'", original, "'", sep = ""), "\n\n",
-              colortext(paste(" ", textsymbol("bullet"), " Refers to the original response that the participant typed", sep = ""), defaults = "message"),
+              colortext(paste(" ", textsymbol("bullet"), " Refers to the original string that the participant typed", sep = ""), defaults = "message"),
               "\n",
               sep = "")
     )
     
-    cat(paste("\n", "Auto-corrected response:\n\n",
+    cat(paste("\n", "Auto-corrected string:\n\n",
               paste("'", context, "'", sep = "", collapse = " "), "\n\n",
-              colortext(paste(" ", textsymbol("bullet"), " Refers to the response that the automated spell-check derived", sep = ""), defaults = "message"),
+              colortext(paste(" ", textsymbol("bullet"), " Refers to the auto-corrected string that the automated spell-check derived", sep = ""), defaults = "message"),
               "\n",
               sep = "")
     )
@@ -3042,11 +3210,12 @@ textcleaner_help <- function(check, context, original, possible)
     
   }
   
-  cat(paste("\n", "Response to manually spell-check: '", colortext(check, defaults = "highlight"), "'\n",
+  cat(paste("\n", "Target word: '", colortext(check, defaults = "highlight"), "'\n",
             paste(
               colortext(paste(" ", textsymbol("bullet"), " Refers to the ", sep = ""), defaults = "message"),
-              styletext(colortext("target", defaults = "message"), defaults = "italics"),
-              colortext(paste(" response to be manually spell-checked", sep = ""), defaults = "message"),
+              #styletext(colortext("target", defaults = "message"), defaults = "italics"),
+              colortext("target", defaults = "message"),
+              colortext(paste(" word to be manually spell-checked", sep = ""), defaults = "message"),
               sep = ""
             ),
             sep = "")
@@ -3055,31 +3224,31 @@ textcleaner_help <- function(check, context, original, possible)
   linebreak()
   
   cat(paste("\n", "1: SKIP WORD\n",
-            colortext(paste(" ", textsymbol("bullet"), " Keeps the target response 'as is' and moves on to next word to be spell-checked", sep = ""), defaults = "message"),
+            colortext(paste(" ", textsymbol("bullet"), " Keeps the target word 'as is' and moves on to next word to be spell-checked", sep = ""), defaults = "message"),
             "\n",
             sep = "")
   )
   
   cat(paste("\n", "2: ADD WORD TO DICTIONARY\n",
-            colortext(paste(" ", textsymbol("bullet"), " Adds the target response to dictionary for future spell-checking", sep = ""), defaults = "message"),
+            colortext(paste(" ", textsymbol("bullet"), " Adds the target word to dictionary for future spell-checking", sep = ""), defaults = "message"),
             "\n",
             sep = "")
   )
   
   cat(paste("\n", "3: TYPE MY OWN WORD\n", 
-            colortext(paste(" ", textsymbol("bullet"), " Allows you to type your own correction for the target response", sep = ""), defaults = "message"),
+            colortext(paste(" ", textsymbol("bullet"), " Allows you to type your own correction for the target word", sep = ""), defaults = "message"),
             "\n",
             sep = "")
   )
   
   cat(paste("\n", "4: GOOGLE WORD\n", 
-            colortext(paste(" ", textsymbol("bullet"), " Opens your default browser and 'Googles' the target response", sep = ""), defaults = "message"),
+            colortext(paste(" ", textsymbol("bullet"), " Opens your default browser and 'Googles' the target word", sep = ""), defaults = "message"),
             "\n",
             sep = "")
   )
   
   cat(paste("\n", "5: BAD WORD\n", 
-            colortext(paste(" ", textsymbol("bullet"), " Marks the target response as an inappropriate response (NA)", sep = ""), defaults = "message"),
+            colortext(paste(" ", textsymbol("bullet"), " Marks the target word as an inappropriate response (NA)", sep = ""), defaults = "message"),
             sep = "")
   )
   
@@ -3089,7 +3258,7 @@ textcleaner_help <- function(check, context, original, possible)
   {
     cat(paste("\n", "6: KEEP ORIGINAL\n",
               paste(colortext(paste(" ", textsymbol("bullet"), " Reverts the string back to the", sep = ""), defaults = "message"),
-                    "Original response:",
+                    "Original string:",
                     colortext("the participant provided", defaults = "message")),
               "\n", sep = ""
     )
@@ -3097,7 +3266,7 @@ textcleaner_help <- function(check, context, original, possible)
     
     cat(paste("\n", "7: KEEP AUTO-CORRECT\n",
               paste(colortext(paste(" ", textsymbol("bullet"), " Keeps the string 'as is' with the", sep = ""), defaults = "message"),
-                    "Auto-correct response:",
+                    "Auto-correct string:",
                     colortext("provided by the automated spell-check", defaults = "message")),
               "\n", sep = ""
     )
@@ -3105,7 +3274,7 @@ textcleaner_help <- function(check, context, original, possible)
     
     cat(paste("\n", "8: TYPE MY OWN STRING\n",
               paste(colortext(paste(" ", textsymbol("bullet"), " Allows you to type your own correction for the", sep = ""), defaults = "message"),
-                    "Original response:",
+                    "Original string:",
                     colortext("the participant provided", defaults = "message")),
               "\n", sep = ""
     )
@@ -3113,7 +3282,7 @@ textcleaner_help <- function(check, context, original, possible)
     
     cat(paste("\n", "9: GOOGLE STRING\n",
               paste(colortext(paste(" ", textsymbol("bullet"), " Opens your default browser and 'Googles' the", sep = ""), defaults = "message"),
-                    "Original response:",
+                    "Original string:",
                     colortext("the participant provided", defaults = "message")),
               "\n", sep = ""
     )
@@ -3129,7 +3298,7 @@ textcleaner_help <- function(check, context, original, possible)
     
     cat(paste("\n", styletext("Response options\n", defaults = "underline"),
               customMenu(choices = choices, title = NULL, default = 10, help = TRUE), "\n",
-              paste(colortext(paste(" ", textsymbol("bullet"), " Potential options based on `textcleaner`'s best guess (letters correspond to the response)", sep = ""), defaults = "message")),
+              paste(colortext(paste(" ", textsymbol("bullet"), " Potential options based on `textcleaner`'s best guess for the target word (letters correspond to the response)", sep = ""), defaults = "message")),
               "\n", sep = ""
     )
     )
@@ -3138,7 +3307,7 @@ textcleaner_help <- function(check, context, original, possible)
     
     cat(paste("\n", styletext("Response options\n", defaults = "underline"),
               customMenu(choices = choices, title = NULL, default = 5, help = TRUE), "\n",
-              paste(colortext(paste(" ", textsymbol("bullet"), " Potential options based on `textcleaner`'s best guess (letters correspond to the response)", sep = ""), defaults = "message")),
+              paste(colortext(paste(" ", textsymbol("bullet"), " Potential options based on `textcleaner`'s best guess for the target word (letters correspond to the response)", sep = ""), defaults = "message")),
               "\n", sep = ""
     )
     )
@@ -3385,4 +3554,69 @@ system.check <- function (...)
   res$TEXT <- TEXT
   
   return(res)
+}
+
+#' Yes/no menu
+#' 
+#' @description Provides Linux style yes/no menu
+#' 
+#' @param title Character.
+#' Custom question
+#'
+#' @return \code{1} for \code{y} and \code{2} for \code{n}
+#' 
+#' @author Alexander Christensen <alexpaulchristensen@gmail.com>
+#' 
+#' @noRd
+#' 
+#' @importFrom utils menu
+#' 
+# Yes/no menu----
+# Updated 22.11.2020
+yes.no.menu <- function (title = NULL) 
+{
+  # function for appropriate response
+  yes.no <- function (ans)
+  {
+    # check for numeric
+    if(is.numeric(ans)){
+      
+      return(NA)
+      
+    }else if(is.character(ans)){
+      
+      #change to lower case
+      ans <- tolower(ans)
+      
+      if(ans != "y" && ans != "yes" && ans != "n" && ans != "no"){
+        return(NA)
+      }else{
+        
+        return(
+          switch(ans,
+                 "y" = 1,
+                 "yes" = 1,
+                 "n" = 2,
+                 "no" = 2
+                 
+          )
+        )
+        
+      }
+      
+    }else{return(NA)}
+  }
+  
+  # append title with Linux style yes/no
+  title <- paste(title, c("[Y/n]? "))
+  
+  # get response
+  ans <- readline(prompt = title)
+  
+  # make sure there is an appropriate response
+  while(is.na(yes.no(ans))){
+    ans <- readline(prompt = "Inappropriate response. Try again [Y/n]. ")
+  }
+  
+  return(yes.no(ans))
 }

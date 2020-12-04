@@ -26,6 +26,18 @@
 #' Use \code{dictionaries()} or \code{find.dictionaries()} for more options
 #' (See \code{\link{SemNetDictionaries}} for more details)
 #' 
+#' @param spelling Character vector.
+#' English spelling to be used.
+#' \itemize{
+#' 
+#' \item{\code{"UK"}}
+#' {For British spelling (e.g., colour, grey, programme, theatre)}
+#' 
+#' \item{\code{"US"}}
+#' {For American spelling (e.g., color, gray, program, theater)}
+#' 
+#' }
+#' 
 #' @param add.path Character.
 #' Path to additional dictionaries to be found.
 #' DOES NOT search recursively (through all folders in path)
@@ -116,17 +128,29 @@
 #' 
 #' @export
 # Text Cleaner----
-# Updated 08.09.2020
+# Updated 02.12.2020
 # Major update: 19.04.2020
 textcleaner <- function(data = NULL, miss = 99,
                         partBY = c("row","col"),
-                        dictionary = NULL, add.path = NULL,
-                        continue = NULL#, walkthrough = NULL
+                        dictionary = NULL, spelling = c("UK", "US"),
+                        add.path = NULL, continue = NULL#, walkthrough = NULL
                         )
 {
+  # Check for dictionary spelling
+  if(missing(spelling)){
+    spelling <- "US"
+    message("The 'spelling' argument was not set. Using default: 'US' English spelling")
+    Sys.sleep(0.5)
+  }else{
+    spelling <- match.arg(spelling)
+  }
+  
   # Check if user is continuing from a previous point
   if(is.null(continue))
   {
+    ## Make sure data is not tibble
+    data <- as.matrix(data)
+    
     ## Make participants by row
     if(partBY=="col")
     {
@@ -182,6 +206,7 @@ textcleaner <- function(data = NULL, miss = 99,
     spell.check <- try(
       spellcheck.dictionary(uniq.resp = uniq.resp,
                             dictionary = dictionary,
+                            spelling = spelling,
                             add.path = add.path,
                             data = data#, walkthrough = walkthrough
                             ),
@@ -199,7 +224,7 @@ textcleaner <- function(data = NULL, miss = 99,
   # Let the user know that their data is being prepared
   message("\nPreparing your data...")
   
-  # Intialize results to return
+  # Initialize results to return
   res <- list()
   
   # Specify variables from spellcheck.dictionary returns
@@ -307,26 +332,39 @@ textcleaner <- function(data = NULL, miss = 99,
   Sys.sleep(2)
   
   # Let user know where to send their dictionaries and monikers
-  dictionary.output <- paste(
-    textsymbol("bullet"),
-    "Dictionary output: `OBJECT_NAME$dictionary`",
-    sep = " "
-  )
+  if("dictionary" %in% names(res)){
+    
+    dictionary.output <- paste(
+      textsymbol("bullet"),
+      "Dictionary output: `OBJECT_NAME$dictionary`",
+      sep = " "
+    )
+    
+  }
   
   moniker.output <- paste(
     textsymbol("bullet"),
-    "Moniker output: `OBJECT_NAME$spellcheck$manual`",
+    "Moniker output: `OBJECT_NAME$moniker`",
     sep = " "
   )
+  
+  ## Save moniker object (doubles up but makes it easy for the user)
+  res$moniker <- res$spellcheck$manual
   
   cat(
     
     colortext(
       
       paste(
-        "Consider submitting your dictionary and spelling corrections (i.e., monikers) to:\n\n",
+        paste(
+          "Consider submitting your",
+          ifelse("dictionary" %in% names(res), " dictionary and", ""),
+          " spelling corrections (i.e., monikers) to:\n\n",
+          sep = ""
+        ),
         "https://github.com/AlexChristensen/SemNetDictionaries/issues/new/choose\n\n",
-        dictionary.output, "\n\n",
+        ifelse("dictionary" %in% names(res), paste(dictionary.output, "\n\n"), ""),
+        #dictionary.output,
         moniker.output, "\n\n"
       ),
       
