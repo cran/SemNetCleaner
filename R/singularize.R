@@ -10,6 +10,10 @@
 #' @param word Character.
 #' A word
 #' 
+#' @param dictionary Boolean.
+#' Should dictionary be used to verify word exists?
+#' Default to \code{TRUE}
+#' 
 #' @return Returns the word in singular form, unless a singular form
 #' could not be found (then the original word is returned)
 #' 
@@ -57,7 +61,8 @@
 #' 
 #' @export
 #Singularize
-singularize <- function(word)
+# Updated 16.08.2021
+singularize <- function(word, dictionary = TRUE)
 {
     #check for multiple words
     spl <- unlist(strsplit(word, " "))
@@ -87,60 +92,28 @@ singularize <- function(word)
                    feet = "foot",
                    mice = "mouse",
                    people = "person",
-                   lice = "louse")
+                   lice = "louse",
+                   valves = "valve",
+                   trees = "tree",
+                   scribbles = "scribble",
+                   peduncles = "peduncle",
+                   mallees = "mallee",
+                   panicles = "panicle",
+                   ridges = "ridge",
+                   petioles = "petiole",
+                   angles = "angle",
+                   bristles = "bristle",
+                   edges = "edge",
+                   fissures = "fissure",
+                   sutures = "suture",
+                   occurrences = "occurrence",
+                   bees = "bee")
     
     if(is.null(word))
     {word <- orig.word
     }else{chn <- TRUE}
     
     #identify common plurals
-    ## last letter
-    last.lets <- substr(word,nchar(word),nchar(word))
-    
-    if(!chn)
-    {
-        if(any(last.lets == c("s","i","a")))
-        {
-            if(last.lets == "s")
-            {
-                #remove 's'
-                word <- substr(word,1,nchar(word)-1)
-            }else if(last.lets == "i")
-            {
-                #remove 'i'
-                word <- substr(word,1,nchar(word)-1)
-                #add 'us'
-                word <- paste(word,"us",sep="",collapse="")
-            }else if(last.lets == "a")
-            {
-                #remove 'a'
-                word <- substr(word,1,nchar(word)-1)
-                #add 'on'
-                word <- paste(word,"on",sep="",collapse="")
-            }
-        }
-    }
-    
-    ## last two letters
-    last.lets <- substr(word,nchar(word)-1,nchar(word))
-    
-    if(!chn)
-    {
-        if(last.lets == "es")
-        {
-            #remove 'es'
-            word <- substr(word,1,nchar(word)-2)
-            
-            if(!word %in% checker)
-            {
-                #add 'is'
-                word <- paste(word,"is",sep="",collapse="")
-            }
-            
-            chn <- TRUE
-        }
-    }
-    
     ## last three letters
     last.lets <- substr(word,nchar(word)-2,nchar(word))
     
@@ -194,13 +167,75 @@ singularize <- function(word)
         }
     }
     
-    #return word
-    if(!word %in% checker)
+    ## last two letters
+    last.lets <- substr(word,nchar(word)-1,nchar(word))
+    
+    if(!chn)
     {
-        if(multiple)
-        {orig.word <- paste(spl, collapse = " ")}
+        if(last.lets == "es")
+        {
+            #remove 'es'
+            word <- substr(word,1,nchar(word)-2)
+            
+            if(!word %in% checker)
+            {
+                #add 'is'
+                word <- paste(word,"is",sep="",collapse="")
+            }
+            
+            chn <- TRUE
+        }
         
-        return(orig.word)
+    }
+    
+    ## last letter
+    last.lets <- substr(word,nchar(word),nchar(word))
+    
+    if(!chn)
+    {
+        if(any(last.lets == c("s","i","a")))
+        {
+            if(last.lets == "s")
+            {
+                #remove 's'
+                word <- substr(word,1,nchar(word)-1)
+            }else if(last.lets == "i")
+            {
+                #remove 'i'
+                word <- substr(word,1,nchar(word)-1)
+                #add 'us'
+                word <- paste(word,"us",sep="",collapse="")
+            }else if(last.lets == "a")
+            {
+                #remove 'a'
+                word <- substr(word,1,nchar(word)-1)
+                #add 'on'
+                word <- paste(word,"on",sep="",collapse="")
+            }
+        }
+        
+    }
+    
+    #return word
+    if(isTRUE(dictionary)){
+        
+        #check for word in dictionary
+        if(!word %in% checker){
+            if(isTRUE(multiple))
+            {orig.word <- paste(spl, collapse = " ")}
+            
+            return(orig.word)
+        }else{
+            
+            if(multiple)
+            {
+                spl[length(spl)] <- word
+                word <- paste(spl, collapse = " ")
+            }
+            
+            return(word)
+        }
+        
     }else{
         
         if(multiple)
@@ -210,6 +245,7 @@ singularize <- function(word)
         }
         
         return(word)
+        
     }
 }
 #----

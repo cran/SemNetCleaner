@@ -44,6 +44,25 @@
 #' to avoid time intensive search.
 #' Set to \code{"choose"} to open an interactive directory explorer
 #' 
+#' @param keepStrings Boolean.
+#' Should strings be retained or separated?
+#' Defaults to \code{FALSE}.
+#' Set to \code{TRUE} to retain strings as strings
+#' 
+#' @param allowPunctuations Character vector.
+#' Allows punctuation characters to be included in responses.
+#' Defaults to \code{"-"}.
+#' Set to \code{"all"} to keep all punctuation characters
+#' 
+#' @param allowNumbers Boolean.
+#' Defaults to \code{FALSE}.
+#' Set to \code{TRUE} to keep numbers in text
+#' 
+#' @param lowercase Boolean.
+#' Should words be converted to lowercase?
+#' Defaults to \code{TRUE}.
+#' Set to \code{FALSE} to keep words as they are
+#' 
 #' @param continue List.
 #' A result previously unfinished that still needs to be completed.
 #' Allows you to continue to manually spell-check their data
@@ -120,7 +139,6 @@
 #' Hornik, K., & Murdoch, D. (2010).
 #' Watch Your Spelling!.
 #' \emph{The R Journal}, \emph{3}, 22-28.
-#' doi:\href{https://doi.org/10.32614/RJ-2011-014}{10.32614/RJ-2011-014}
 #' 
 #' @author Alexander Christensen <alexpaulchristensen@gmail.com>
 #' 
@@ -128,21 +146,46 @@
 #' 
 #' @export
 # Text Cleaner----
-# Updated 02.12.2020
+# Updated 05.01.2021
+# Keep strings update: 06.08.2020
 # Major update: 19.04.2020
 textcleaner <- function(data = NULL, miss = 99,
                         partBY = c("row","col"),
                         dictionary = NULL, spelling = c("UK", "US"),
-                        add.path = NULL, continue = NULL#, walkthrough = NULL
+                        add.path = NULL, keepStrings = FALSE,
+                        allowPunctuations = c("-", "all"),
+                        allowNumbers = FALSE, lowercase = TRUE,
+                        continue = NULL#, walkthrough = NULL
                         )
 {
-  # Check for dictionary spelling
-  if(missing(spelling)){
-    spelling <- "US"
-    message("The 'spelling' argument was not set. Using default: 'US' English spelling")
-    Sys.sleep(0.5)
-  }else{
-    spelling <- match.arg(spelling)
+  
+  # Warning for keepStrings
+  if(keepStrings){
+    warning("Keeping strings intact is a new feature. There may be bugs or unexpected behavior.")
+    message("\nPlease send issues to:")
+    message("\nhttps://github.com/AlexChristensen/SemNetCleaner/issues")
+  }
+  
+  
+  # Check for missing arguments
+  if(is.null(continue)){
+    
+    ## Spelling
+    if(missing(spelling)){
+      spelling <- "US"
+      message("\nThe 'spelling' argument was not set. Using default: 'US' English spelling")
+      Sys.sleep(0.5)
+    }else{
+      spelling <- match.arg(spelling)
+    }
+    
+    ## Allow punctuations
+    if(missing(allowPunctuations)){
+      allowPunctuations <- "-"
+    }else{
+      allowPunctuations <- match.arg(allowPunctuations, several.ok = TRUE)
+    }
+    
   }
   
   # Check if user is continuing from a previous point
@@ -188,7 +231,7 @@ textcleaner <- function(data = NULL, miss = 99,
     ### Removes white spaces
     ### Makes all responses lower case
     data <- try(
-      prep.spellcheck.dictionary(data),
+      prep.spellcheck.dictionary(data, allowPunctuations, allowNumbers, lowercase),
       silent = TRUE
     )
     
@@ -208,6 +251,7 @@ textcleaner <- function(data = NULL, miss = 99,
                             dictionary = dictionary,
                             spelling = spelling,
                             add.path = add.path,
+                            keepStrings = keepStrings,
                             data = data#, walkthrough = walkthrough
                             ),
       silent <- TRUE
@@ -317,13 +361,22 @@ textcleaner <- function(data = NULL, miss = 99,
   class(res) <- "textcleaner"
   
   # Correct auto-corrections
-  res <- try(correct.changes(res), silent = TRUE)
-  
-  if(any(class(res) == "try-error"))
-  {
-    error.fun(res, "correct.changes", "textcleaner")
+  ## Check if there were auto-corrections
+  if(length(res$spellcheck$automated) != 0){
     
-    return(res)
+    res.check <- try(correct.changes(res), silent = TRUE)
+    
+    if(any(class(res.check) == "try-error"))
+    {
+      error.fun(res, "correct.changes", "textcleaner")
+      
+      return(res)
+    }else{res <- res.check}
+    
+  }else{
+    
+    message("\nNo auto-corrections were made. Skipping automated spell-check verification.")
+    
   }
   
   # Let user know spell-check is complete

@@ -81,38 +81,11 @@
 #' @export
 #' 
 # Correct changes----
-# Updated 10.09.2020
+# Updated 15.08.2021
 # Major update: 19.04.2020
 correct.changes <- function(textcleaner.obj)
 {
   
-  # Set up message to user
-  cat(colortext("\nYou will now have a chance to correct the changes that", defaults = "message"))
-  cat(colortext("\nwere made during the automated spell-checking process.", defaults = "message"))
-  cat(colortext("\nA spreadsheet will open allowing you to manually correct", defaults = "message"))
-  cat(colortext("\nthese changes.\n\n", defaults = "message"))
-  
-  readline("Press ENTER to continue...")
-  
-  cat(colortext("\nThe first column of the spreadsheet corresponds to the", defaults = "message"))
-  cat(colortext("\nrow number provided in the output object `$spellcheck$correspondence`", defaults = "message"))
-  cat(colortext("\n(see ?textcleaner for more information about this output).", defaults = "message"))
-  
-  cat(colortext("\n\nThe second column is the original response the participant provided", defaults = "message"))
-  cat(colortext(paste("\nand columns 3 through", 3 + (ncol(textcleaner.obj$spellcheck$automated) - 2),
-                      "are the automated spell-check responses."), defaults = "message"))
-  cat(colortext('\nThese columns will have names formatted with "to_#".\n\n', defaults = "message"))
-  
-  readline("Press ENTER to continue...")
-    
-  cat(colortext(paste("\nYou should change columns 3 through", 3 + (ncol(textcleaner.obj$spellcheck$automated) - 2),
-                      "by manually typing responses."), defaults = "message"))
-  cat(colortext('\nFor inappropriate responses, "NA" should be typed. When finished,', defaults = "message"))
-  cat(colortext('\nyou can exit this process by clicking the "X" in the top right', defaults = "message"))
-  cat(colortext('\ncorner of the spreadsheet.\n\n', defaults = "message"))
-  
-  readline("Press ENTER to proceed with spell-check.")
-
   # Check if textcleaner object is input
   if(!class(textcleaner.obj) == "textcleaner")
   {stop("A 'textcleaner' class object was not input in the 'textcleaner.obj' argument")}
@@ -123,11 +96,84 @@ correct.changes <- function(textcleaner.obj)
   ## Original automated responses
   automated <- res$spellcheck$automated
   
+  # Make sure automated responses are a matrix
+  if(is.vector(automated)){
+    automated <- t(as.matrix(automated))
+  }
+  
   # Get changes
-  changes <- edit(automated)
+  ## Check operating system
+  OS <- system.check()$OS
+  
+  if(OS == "linux"){
+    
+    # Set up message to user
+    cat(colortext("\nYou will now have a chance to correct the changes that", defaults = "message"))
+    cat(colortext("\nwere made during the automated spell-checking process.", defaults = "message"))
+    cat(colortext("\nA spreadsheet will open allowing you to manually correct", defaults = "message"))
+    cat(colortext("\nthese changes.\n\n", defaults = "message"))
+    
+    readline("Press ENTER to continue...")
+    
+    cat(colortext("\nThe first column of the spreadsheet corresponds to the", defaults = "message"))
+    cat(colortext("\nrow number provided in the output object `$spellcheck$correspondence`", defaults = "message"))
+    cat(colortext("\n(see ?textcleaner for more information about this output).", defaults = "message"))
+    
+    cat(colortext("\n\nThe second column is the original response the participant provided", defaults = "message"))
+    cat(colortext(paste("\nand columns 3 through", 3 + (ncol(textcleaner.obj$spellcheck$automated) - 2),
+                        "are the automated spell-check responses."), defaults = "message"))
+    cat(colortext('\nThese columns will have names formatted with "to_#".\n\n', defaults = "message"))
+    
+    readline("Press ENTER to continue...")
+    
+    cat(colortext(paste("\nYou should change columns 3 through", 3 + (ncol(textcleaner.obj$spellcheck$automated) - 2),
+                        "by manually typing responses."), defaults = "message"))
+    cat(colortext('\nFor inappropriate responses, "NA" should be typed. When finished,', defaults = "message"))
+    cat(colortext('\nyou can exit this process by clicking the "X" in the top right', defaults = "message"))
+    cat(colortext('\ncorner of the spreadsheet.\n\n', defaults = "message"))
+    
+    readline("Press ENTER to proceed with spell-check.")
+    
+    changes <- edit(automated)
+    
+  }else{
+    
+    # Set up message to user
+    cat(colortext("\nYou will now have a chance to correct the changes that", defaults = "message"))
+    cat(colortext("\nwere made during the automated spell-checking process.", defaults = "message"))
+    cat(colortext("\nA spreadsheet will open allowing you to manually correct", defaults = "message"))
+    cat(colortext("\nthese changes.\n\n", defaults = "message"))
+    
+    readline("Press ENTER to continue...")
+    
+    cat(colortext("\nThe first column of the spreadsheet corresponds to the", defaults = "message"))
+    cat(colortext("\nrow number provided in the output object `$spellcheck$correspondence`", defaults = "message"))
+    cat(colortext("\n(see ?textcleaner for more information about this output).", defaults = "message"))
+    
+    cat(colortext("\n\nThe second column is the original response the participant provided", defaults = "message"))
+    cat(colortext(paste("\nand columns 2 through", 2 + (ncol(textcleaner.obj$spellcheck$automated) - 2),
+                        "are the automated spell-check responses."), defaults = "message"))
+    cat(colortext('\nThese columns will have names formatted with "to_#".\n\n', defaults = "message"))
+    
+    readline("Press ENTER to continue...")
+    
+    cat(colortext(paste("\nYou should change columns 2 through", 2 + (ncol(textcleaner.obj$spellcheck$automated) - 2),
+                        "by manually typing responses."), defaults = "message"))
+    cat(colortext('\nFor inappropriate responses, "NA" should be typed. When finished,', defaults = "message"))
+    cat(colortext('\nyou can exit this process by clicking the "Done" in the top right', defaults = "message"))
+    cat(colortext('\ncorner of the spreadsheet.\n\n', defaults = "message"))
+    
+    readline("Press ENTER to proceed with spell-check.")
+  
+    changes <- SemNetCleanerEdit() # Make changes
+    automated <- as.matrix(automated) # Convert back to matrix
+    changes <- as.matrix(changes) # Convert changes to matrix
+    changes <- ifelse(changes == "", NA, changes) # Replace blanks with NA
+  }
   
   # Get differences
-  differences <- automated[,-1] != changes[,-1]
+  #differences <- automated[,-1] != changes[,-1]
+  differences <- automated != changes
   
   ## Ensure matrix
   if(!is.matrix(differences)){
@@ -141,7 +187,7 @@ correct.changes <- function(textcleaner.obj)
   # If there are no changes, then return original object
   if(length(target.changes) == 0)
   {
-    message("\nNo responses changed.\n")
+    message("\nNo responses changed.")
     
     return(textcleaner.obj)
     
@@ -157,7 +203,9 @@ correct.changes <- function(textcleaner.obj)
       chn.mat <- rbind(automated[target.changes[i],], changes[target.changes[i],])
       colnames(chn.mat)[-1] <- rep("to", ncol(chn.mat)-1)
       row.names(chn.mat) <- c("Previous", "Corrected")
-      chn.mat <- chn.mat[,-which(apply(chn.mat, 2, function(x){all(is.na(x))}))]
+      if(any(apply(chn.mat, 2, function(x){all(is.na(x))}))){
+        chn.mat <- chn.mat[,-which(apply(chn.mat, 2, function(x){all(is.na(x))}))]
+      }
       
       track.changes[[automated[target.changes[i],1]]] <- chn.mat
     }
@@ -200,7 +248,9 @@ correct.changes <- function(textcleaner.obj)
     from <- as.list(correspondence[,"from"])
     
     # Create 'to' list
-    to <- apply(correspondence[,grep("to", colnames(correspondence))], 1, function(x){unname(na.omit(x))})
+    if(any(is.na(correspondence[,grep("to", colnames(correspondence))]))){
+      to <- apply(correspondence[,grep("to", colnames(correspondence))], 1, function(x){unname(na.omit(x))})
+    }else{to <- correspondence[,grep("to", colnames(correspondence))]}
     
     # Create correspondence matrix (error catch)
     corr.mat <- try(
@@ -231,6 +281,11 @@ correct.changes <- function(textcleaner.obj)
     
     ## Cleaned responses (no instrusions or perseverations)
     cleaned.list <- apply(corrected$corrected, 1, function(x){unique(na.omit(x))})
+    
+    ## Check if cleaned.list is a list
+    if(!is.list(cleaned.list)){
+      cleaned.list <- apply(cleaned.list, 1, as.list)
+    }
     
     max.resp <- max(unlist(lapply(cleaned.list, length)))
     
