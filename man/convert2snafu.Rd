@@ -2,7 +2,8 @@
 % Please edit documentation in R/convert2snafu.R
 \name{convert2snafu}
 \alias{convert2snafu}
-\title{Pathfinder Network}
+\title{Converts \code{\link[SemNetCleaner]{textcleaner}} object
+to a SNAFU GUI format}
 \usage{
 convert2snafu(..., category)
 }
@@ -17,28 +18,31 @@ Category of verbal fluency data}
 A .csv file formatted for SNAFU
 }
 \description{
-Estimates a pathfinder network using the MST-Pathfinder
-Network method from Quirin et al. (2008; see also Schvaneveldt, 1990)
+Converts \code{\link[SemNetCleaner]{textcleaner}} object
+to a SNAFU GUI format (only works for fluency data)
 }
 \details{
 The format of the file has 7 columns:
 \itemize{
-\item{id}{Defaults to the row names of the inputted \code{data}}
 
-\item{listnum}{The list number for the fluency category. Defaults to 0.
-Future implementations will allow more lists}
+\item id --- Defaults to the row names of the inputted \code{data}
 
-\item{category}{The verbal fluency category that is input into the
-\code{category} argument}
+\item listnum --- The list number for the fluency category. Defaults to 0.
+Future implementations will allow more lists
 
-\item{item}{The verbal fluency responses for every participant}
+\item category --- The verbal fluency category that is input into the
+\code{category} argument
 
-\item{RT}{Response time. Currently not implemented. Defaults to 0}
+\item item --- The verbal fluency responses for every participant
 
-\item{RTstart}{Start of response time. Currently not implemented. Defaults to 0}
+\item RT --- Response time. Currently not implemented. Defaults to 0
 
-\item{group}{Names of groups. Defaults to the names of the objects input into
-the function (\code{...})}
+\item RTstart --- Start of response time. Currently not implemented.
+Defaults to 0
+
+\item group --- Names of groups. Defaults to the names of the objects
+input into the function (\code{...})
+
 }
 }
 \examples{

@@ -2,6 +2,65 @@
 #### MULTIPLE FUNCTIONS ####
 #%%%%%%%%%%%%%%%%%%%%%%%%%%#
 
+#' Obtains minimum and maximum of number sequences in a single vector
+#' @noRd
+#
+# Minimums and maximums of a sequence
+# Updated 06.04.2022
+seq_min_max <- function(sequence)
+{
+  # Determine sequences
+  ## Obtain differences between values
+  value_differences <- diff(sequence)
+  
+  ## Identify differences equal to one
+  if(all(value_differences == 1)){
+    
+    # Obtain minimum and maximum
+    minimum <- min(sequence, na.rm = TRUE)
+    maximum <- max(sequence, na.rm = TRUE)
+    
+  }else{
+    
+    ## Determine breaks in sequences
+    breaks <- which(value_differences != 1)
+    
+    ## Add end of sequence
+    breaks <- c(breaks, length(sequence))
+    
+    ## Set up start of breaks
+    starts <- (breaks + 1) - c(breaks[1], diff(breaks))
+    
+    ## Obtain sequences
+    split_sequences <- lapply(1:length(breaks), function(i){
+      return(sequence[starts[i]:breaks[i]])
+    })
+    
+    ## Obtain lengths
+    lengths <- unlist(lapply(split_sequences, length))
+    
+    ## Obtain minimums
+    minimum <- unlist(lapply(split_sequences, min, na.rm = TRUE))
+    
+    ## Obtain maximums
+    maximum <- unlist(lapply(split_sequences, max, na.rm = TRUE))
+    
+  }
+  
+  # Return list
+  res <- list()
+  res$min <- minimum
+  res$max <- maximum
+  if(exists("breaks", envir = environment())){
+    res$breaks  <- breaks
+    res$starts <- starts
+    res$lengths <- lengths
+  }
+  
+  return(res)
+  
+}
+
 # Line break function
 linebreak <- function(breaks = "\n"){cat(breaks, colortext(paste(rep("-", getOption("width")), collapse = ""), defaults = "message"), "\n")}
 
@@ -630,6 +689,693 @@ yes.no.menu <- function (title = NULL)
   return(yes.no(ans))
 }
 
+#%%%%%%%%%%%%%%%%%%%%%%%%#
+#### TEXTCLEANER MAIN ####
+#%%%%%%%%%%%%%%%%%%%%%%%%#
+
+#' @author Alexander Christensen <alexpaulchristensen@gmail.com>
+#' 
+#' @noRd
+# Updated 21.06.2022
+# Keep strings update: 06.08.2020
+# Major update: 19.04.2020
+# Added type of task: 21.10.2021
+textcleaner.fluency <- function(
+  data = NULL, miss = 99, partBY = c("row","col"),
+  dictionary = NULL, spelling = c("UK", "US"),
+  add.path = NULL, keepStrings = FALSE,
+  allowPunctuations = c("-", "all"),
+  allowNumbers = FALSE, lowercase = TRUE,
+  keepLength = NULL,
+  continue = NULL
+)
+{
+  
+  # Check for missing arguments
+  if(is.null(continue)){
+    
+    ## Spelling
+    if(missing(spelling)){
+      spelling <- "US"
+      message("\nThe 'spelling' argument was not set. Using default: 'US' English spelling")
+      Sys.sleep(0.5)
+    }else{
+      spelling <- match.arg(spelling)
+    }
+    
+    ## Allow punctuations
+    if(missing(allowPunctuations)){
+      allowPunctuations <- "-"
+    }
+    
+  }
+  
+  # Check if user is continuing from a previous point
+  if(is.null(continue)){
+    
+    ## Make sure data is not tibble
+    data <- as.matrix(data)
+    
+    ## Make participants by row
+    if(partBY == "col"){
+      
+      ### Transpose data
+      data <- t(data)
+      
+      ### Let user know
+      message("\nParticipants were made to go across the rows")
+    }
+    
+    ## Change row names to IDs (error catch)
+    id.res <- try(
+      obtain.id(data, type = "fluency"),
+      silent = TRUE
+    )
+    
+    if(any(class(id.res) == "try-error")){
+      return(error.fun(id.res, "obtain.id", "textcleaner"))
+    }
+    
+    data <- id.res$data
+    ids <- id.res$ids
+    row.names(data) <- ids
+    
+    ## Convert missing data to "" (returns data as matrix; error catch)
+    data <- try(
+      convert.miss(data, miss, type = "fluency"),
+      silent = TRUE
+    )
+    
+    if(any(class(data) == "try-error")){
+      return(error.fun(data, "convert.miss", "textcleaner"))
+    }
+    
+    ## Prepare for spellcheck.dictionary (returns data as data frame)
+    ### Removes punctuations and digits
+    ### Removes white spaces
+    ### Makes all responses lower case
+    data <- try(
+      prep.spellcheck.dictionary(data, allowPunctuations, allowNumbers, lowercase,
+                                 type = "fluency"),
+      silent = TRUE
+    )
+    
+    if(any(class(data) == "try-error")){
+      return(error.fun(data, "prep.spellcheck.dictionary", "textcleaner"))
+    }
+    
+    ## Remove responses with a certain length
+    if(!is.null(keepLength)){
+      
+      ## Ensure data is a matrix
+      data <- as.matrix(data)
+      
+      ## Length of responses
+      response_lengths <- apply(
+        data, 1:2, length
+      )
+      
+      ## Keep responses less than or equal to keepLength argument
+      remove_responses <- which(response_lengths >= keepLength, arr.ind = TRUE)
+      
+      ## Remove responses
+      if(nrow(remove_responses) != 0){
+        
+        for(i in 1:nrow(remove_responses)){
+          
+          data[
+            remove_responses[i,1],
+            remove_responses[i,2]
+          ] <- NA
+          
+        }
+        
+      }
+      
+      
+    }
+    
+    ## Convert data to data frame
+    data <- as.data.frame(data)
+    
+    ## Obtain unique responses for efficient spell-checking
+    uniq.resp <- na.omit(unique(unlist(data)))
+    
+    # Sort out dictionaries
+    if(is.null(dictionary)){
+      dictionary <- "cocaspell"
+    }
+    
+    # Perform spell-check
+    spell.check <- try(
+      spellcheck.dictionary(uniq.resp = uniq.resp,
+                            dictionary = dictionary,
+                            spelling = spelling,
+                            add.path = add.path,
+                            keepStrings = keepStrings,
+                            data = data#, walkthrough = walkthrough
+      ),
+      silent <- TRUE
+    )
+    
+  }else if(length(continue) != 7){ # Continue spell-check
+    spell.check <- spellcheck.dictionary(continue = continue)
+  }else{spell.check <- continue}
+  
+  # Check if spell-check was stopped (either error or user stop)
+  if(isTRUE(spell.check$stop))
+  {return(spell.check)}
+  
+  # Initialize results to return
+  res <- list()
+  
+  # Specify variables from spellcheck.dictionary returns
+  
+  ## Return dictionary if user decided to
+  if("dictionary" %in% names(spell.check)){
+    res$dictionary <- spell.check$dictionary
+  }
+  
+  ## Re-assign data and ids variables in case of user stoppage or error
+  data <- spell.check$data
+  ids <- row.names(spell.check$data)
+  res$responses$original <- data
+  
+  ## Assign spell-checking objects
+  original <- spell.check$from
+  checked <- spell.check$to
+  
+  # Create correspondence matrix (error catch)
+  corr.mat <- try(
+    correspondence.matrix(original, checked),
+    silent = TRUE
+  )
+  
+  if(any(class(corr.mat) == "try-error")){
+    
+    error.fun(corr.mat, "correspondence.matrix", "textcleaner")
+    
+    return(spell.check)
+  }
+  
+  row.names(corr.mat) <- formatC(1:nrow(corr.mat), digits = 2, flag = 0)
+  res$spellcheck$correspondence <- corr.mat
+  res$spellcheck$automated <- corr.mat[spell.check$auto,]
+  res$spellcheck$manual <- corr.mat[spell.check$manual,]
+  
+  # Correct auto-corrections
+  ## Check if there were auto-corrections
+  if(length(res$spellcheck$automated) != 0){
+    
+    res.check <- try(correct.changes(res, type = "fluency"), silent = TRUE)
+    
+    if(any(class(res.check) == "try-error"))
+    {
+      error.fun(res, "correct.changes", "textcleaner")
+      
+      return(res)
+    }else{res <- res.check}
+    
+  }else{
+    
+    message("\nNo auto-corrections were made. Skipping automated spell-check verification.")
+    
+  }
+  
+  # Get spell-corrected data (error catch)
+  corrected <- try(
+    correct.data(data, corr.mat),
+    silent = TRUE
+  )
+  
+  if(any(class(corrected) == "try-error"))
+  {
+    error.fun(corrected, "correct.data", "textcleaner")
+    
+    return(spell.check)
+  }
+  
+  ## Collect behavioral data
+  behavioral <- corrected$behavioral
+  
+  ## Make sure to replace faux "NA" with real NA
+  corrected$corrected[which(corrected$corrected == "NA")] <- NA
+  
+  ## Cleaned responses (no instrusions or perseverations)
+  cleaned.list <- apply(corrected$corrected, 1, function(x){unique(na.omit(x))})
+  
+  max.resp <- max(unlist(lapply(cleaned.list, length)))
+  
+  cleaned.matrix <- t(sapply(
+    lapply(cleaned.list, function(x, max.resp){
+      c(x, rep(NA, max.resp - length(x)))
+    }, max.resp = max.resp)
+    ,rbind))
+  
+  colnames(cleaned.matrix) <- paste("Response_", formatC(1:ncol(cleaned.matrix),
+                                                         digits = nchar(ncol(cleaned.matrix)) - 1,
+                                                         flag = "0"), sep = "")
+  
+  res$responses$clean <- cleaned.matrix
+  
+  # Convert to binary response matrix (error catch)
+  res$responses$binary <- try(
+    resp2bin(corrected$corrected),
+    silent = TRUE
+  )
+  
+  if(any(class(res$responses$binary) == "try-error"))
+  {
+    error.fun(corrected, "resp2bin", "textcleaner")
+    
+    return(spell.check)
+  }
+  
+  behavioral <- cbind(behavioral, rowSums(res$responses$binary))
+  colnames(behavioral)[3] <- "Appropriate"
+  res$behavioral <- as.data.frame(behavioral)
+  
+  # Make 'textcleaner' class
+  class(res) <- "textcleaner"
+  
+  # Let user know spell-check is complete
+  Sys.sleep(1)
+  message("\nPreprocessing complete.\n")
+  Sys.sleep(2)
+  
+  # Let user know where to send their dictionaries and monikers
+  if("dictionary" %in% names(res)){
+    
+    dictionary.output <- paste(
+      textsymbol("bullet"),
+      "Dictionary output: `OBJECT_NAME$dictionary`",
+      sep = " "
+    )
+    
+  }
+  
+  moniker.output <- paste(
+    textsymbol("bullet"),
+    "Moniker output: `OBJECT_NAME$moniker`",
+    sep = " "
+  )
+  
+  ## Save moniker object (doubles up but makes it easy for the user)
+  res$moniker <- res$spellcheck$manual
+  
+  cat(
+    
+    colortext(
+      
+      paste(
+        paste(
+          "Consider submitting your",
+          ifelse("dictionary" %in% names(res), " dictionary and", ""),
+          " spelling corrections (i.e., monikers) to:\n\n",
+          sep = ""
+        ),
+        "https://github.com/AlexChristensen/SemNetDictionaries/issues/new/choose\n\n",
+        ifelse("dictionary" %in% names(res), paste(dictionary.output, "\n\n"), ""),
+        #dictionary.output,
+        moniker.output, "\n\n"
+      ),
+      
+      defaults = "message"
+      
+    )
+    
+  )
+  
+  class(res) <- c("textcleaner", "fluency")
+  
+  Sys.sleep(2)
+  
+  
+  return(res)
+}
+
+#' @author Alexander Christensen <alexpaulchristensen@gmail.com>
+#' 
+#' @noRd
+# Updated 21.06.2022
+# Keep strings update: 06.08.2020
+# Major update: 19.04.2020
+# Added type of task: 21.10.2021
+textcleaner.free <- function(
+  data = NULL, miss = 99,
+  spelling = c("UK", "US"),
+  add.path = NULL, keepStrings = FALSE,
+  allowPunctuations, dictionary,
+  allowNumbers = FALSE, lowercase = TRUE,
+  keepLength = NULL, keepCue = FALSE,
+  continue = NULL
+)
+{
+  
+  # Warning
+  warning(
+    "Free association preprocessing is still in development. Use with caution and independently verify that the results are correct.\n\nPlease send bugs/issues to <https://github.com/AlexChristensen/SemNetCleaner/issues"
+  )
+  
+  # Check for missing arguments
+  if(is.null(continue)){
+    
+    ## Spelling
+    if(missing(spelling)){
+      spelling <- "US"
+      message("\nThe 'spelling' argument was not set. Using default: 'US' English spelling")
+      Sys.sleep(0.5)
+    }else{
+      spelling <- match.arg(spelling)
+    }
+    
+    ## Allow punctuations
+    if(missing(allowPunctuations)){
+      allowPunctuations <- "-"
+    }
+    
+  }
+  
+  # Check if user is continuing from a previous point
+  if(is.null(continue)){
+    
+    ## Make sure data is not tibble
+    data <- as.matrix(data)
+    
+    ## Change row names to IDs (error catch)
+    id.res <- try(
+      obtain.id(data, type = "free"),
+      silent = TRUE
+    )
+    
+    if(any(class(id.res) == "try-error")){
+      return(error.fun(id.res, "obtain.id", "textcleaner"))
+    }
+    
+    data <- id.res$data
+    ids <- id.res$ids
+    
+    ## Convert missing data to "" (returns data as matrix; error catch)
+    data <- try(
+      convert.miss(data, miss, type = "free"),
+      silent = TRUE
+    )
+    
+    if(any(class(data) == "try-error")){
+      return(error.fun(data, "convert.miss", "textcleaner"))
+    }
+    
+    ## Prepare for spellcheck.dictionary (returns data as data frame)
+    ### Removes punctuations and digits
+    ### Removes white spaces
+    ### Makes all responses lower case
+    data <- try(
+      prep.spellcheck.dictionary(
+        data, allowPunctuations,
+        allowNumbers, lowercase,
+        type = "free"
+      ),
+      silent = TRUE
+    )
+    
+    if(any(class(data) == "try-error")){
+      return(error.fun(data, "prep.spellcheck.dictionary", "textcleaner"))
+    }
+    
+    ## Remove responses with a certain length
+    if(!is.null(keepLength)){
+      
+      ## Length of responses
+      response_lengths <- unlist(
+        lapply(strsplit(
+          data[,"Response"], split = " "
+        ), length)
+      )
+      
+      ## Keep responses less than or equal to keepLength argument
+      data <- data[response_lengths <= keepLength,]
+      
+    }
+    
+    ## Remove cue responses
+    if(!isTRUE(keepCue)){
+      
+      ## Cue words
+      cues <- unique(data[,"Cue"])
+      
+      ## Remove cues in responses
+      data <- data[is.na(match(data[,"Response"], cues)),]
+      
+    }
+    
+    ## Obtain unique responses for efficient spell-checking
+    uniq.resp <- na.omit(unique(unlist(data[,"Response"])))
+    
+    # Perform spell-check
+    spell.check <- try(
+      spellcheck.dictionary.free(
+        uniq.resp = uniq.resp,
+        dictionary = dictionary,
+        spelling = spelling,
+        add.path = add.path,
+        keepStrings = keepStrings,
+        keepLength = keepLength,
+        data = data
+      ),
+      silent <- TRUE
+    )
+    
+  }else if(length(continue) > 8){ # Continue spell-check
+    spell.check <- spellcheck.dictionary.free(continue = continue)
+  }else{
+    spell.check <- continue
+  }
+  
+  # Check if spell-check was stopped (either error or user stop)
+  if(spell.check$stop){
+    return(spell.check)
+  }
+  
+  # Re-obtain IDs
+  ids <- unique(spell.check$data[,"ID"])
+  
+  # Initialize results to return
+  res <- list()
+  
+  ## Return dictionary if user decided to
+  if("dictionary" %in% names(spell.check)){
+    res$dictionary <- spell.check$dictionary
+  }
+  
+  ## Re-assign data and ids variables in case of user stoppage or error
+  data <- spell.check$data
+  res$data$original <- data
+  
+  ## Assign spell-checking objects
+  original <- spell.check$from
+  checked <- spell.check$to
+  
+  # Create correspondence matrix (error catch)
+  corr.mat <- try(
+    correspondence.matrix(original, checked),
+    silent = TRUE
+  )
+  
+  if(any(class(corr.mat) == "try-error")){
+    
+    error.fun(corr.mat, "correspondence.matrix", "textcleaner")
+    
+    return(spell.check)
+  }
+  
+  # Check corr.mat for more NAs
+  if(ncol(corr.mat) > 2){
+    corr.mat[,-1] <- apply(corr.mat[,-1], 1:2, function(x){
+      val <- grep("NA", x)
+      ifelse(length(val) == 0, x, "NA")
+    })
+  }else{
+    corr.mat[,-1] <- unlist(
+      lapply(corr.mat[,-1], function(x){
+        val <- grep("NA", x)
+        ifelse(length(val) == 0, x, "NA")
+      })
+    ) 
+  }
+  
+  row.names(corr.mat) <- formatC(1:nrow(corr.mat), digits = 2, flag = 0)
+  res$spellcheck$correspondence <- corr.mat
+  res$spellcheck$automated <- corr.mat[spell.check$auto,]
+  res$spellcheck$manual <- corr.mat[spell.check$manual,]
+  
+  # Correct auto-corrections
+  ## Check if there were auto-corrections
+  if(length(res$spellcheck$automated) != 0){
+    
+    res <- try(correct.changes(res, type = "free"), silent = TRUE)
+    
+    if(any(class(res) == "try-error"))
+    {
+      error.fun(res, "correct.changes", "textcleaner")
+      
+      return(res)
+    }
+    
+    ## Replace correspondence matrix after correcting changes
+    corr.mat <- res$spellcheck$correspondence
+    
+  }else{
+    
+    message("\nNo auto-corrections were made. Skipping automated spell-check verification.")
+    
+  }
+  
+  # Get spell-corrected data (error catch)
+  corrected <- try(
+    correct.data.free(data, corr.mat, ids),
+    silent = TRUE
+  )
+
+  if(any(class(corrected) == "try-error")){
+    
+    error.fun(corrected, "correct.data.free", "textcleaner")
+
+    return(spell.check)
+  }
+
+  ## Collect behavioral data
+  behavioral <- corrected$behavioral
+
+  ## Cleaned responses (no instrusions or perseverations)
+  cleaned.list <- na.omit(corrected$corrected)
+  
+  ## Cleaned data
+  res$data$clean <- cleaned.list
+  
+  ## Create frequency matrix
+  ### Unique responses and cues
+  unique.responses <- unique(cleaned.list$Response)
+  unique.cues <- unique(cleaned.list$Cue)
+  
+  ### Initialize cleaned matrix
+  cleaned.matrix <- matrix(
+    0, nrow = length(unique.responses), ncol = length(unique.cues) 
+  )
+  row.names(cleaned.matrix) <- unique.responses
+  colnames(cleaned.matrix) <- unique.cues
+  
+  # Loop through for frequencies
+  for(i in 1:length(unique.cues)){
+    
+    frequency <- table(cleaned.list$Response[cleaned.list$Cue == unique.cues[i]])
+    
+    cleaned.matrix[names(frequency),i] <- frequency
+    
+  }
+  
+  res$responses$clean <- cleaned.matrix
+  
+  # Convert to binary response matrix (error catch)
+  # res$responses$binary <- try(
+  #   resp2bin(corrected$corrected),
+  #   silent = TRUE
+  # )
+  # 
+  # if(any(class(res$responses$binary) == "try-error"))
+  # {
+  #   error.fun(corrected, "resp2bin", "textcleaner")
+  #   
+  #   return(spell.check)
+  # }
+  
+  # Compute totals
+  ## Initialize vector and list
+  total.vector <- vector(length = length(ids))
+  #total.list <- vector("list", length(ids))
+  names(total.vector) <- ids
+  #names(total.list) <- ids
+  
+  ## Loop through for totals
+  for(i in 1:length(ids)){
+    
+    # Target participant
+    target.p <- cleaned.list[cleaned.list$ID == ids[i],]
+    
+    # Total overall
+    total.vector[i] <- nrow(target.p)
+    
+    # # Target cue
+    # target.c <- unique(target.p$Cue)
+    # total.individual <- vector(length = length(target.c))
+    # names(total.individual) <- target.c
+    # 
+    # for(j in 1:length(target.c)){
+    #   total.individual[j] <- sum(target.p$Cue == target.c[j])
+    # }
+    # 
+    # # Total individual
+    # total.list[[i]] <- total.individual
+    
+  }
+  
+  behavioral <- cbind(behavioral, total.vector)
+  colnames(behavioral)[3] <- "Appropriate"
+  res$behavioral <- as.data.frame(behavioral)
+  
+  # Make 'textcleaner' class
+  class(res) <- "textcleaner"
+  
+  # Let user know spell-check is complete
+  message("\nPreprocessing complete.\n")
+  
+  # Let user know where to send their dictionaries and monikers
+  if("dictionary" %in% names(res)){
+    
+    dictionary.output <- paste(
+      textsymbol("bullet"),
+      "Dictionary output: `OBJECT_NAME$dictionary`",
+      sep = " "
+    )
+    
+  }
+  
+  moniker.output <- paste(
+    textsymbol("bullet"),
+    "Moniker output: `OBJECT_NAME$moniker`",
+    sep = " "
+  )
+  
+  ## Save moniker object (doubles up but makes it easy for the user)
+  # res$moniker <- res$spellcheck$manual
+  # 
+  # cat(
+  #   
+  #   colortext(
+  #     
+  #     paste(
+  #       paste(
+  #         "Consider submitting your",
+  #         ifelse("dictionary" %in% names(res), " dictionary and", ""),
+  #         " spelling corrections (i.e., monikers) to:\n\n",
+  #         sep = ""
+  #       ),
+  #       "https://github.com/AlexChristensen/SemNetDictionaries/issues/new/choose\n\n",
+  #       ifelse("dictionary" %in% names(res), paste(dictionary.output, "\n\n"), ""),
+  #       #dictionary.output,
+  #       moniker.output, "\n\n"
+  #     ),
+  #     
+  #     defaults = "message"
+  #     
+  #   )
+  #   
+  # )
+  
+  class(res) <- c("textcleaner", "free")
+  
+  return(res)
+}
+
 #%%%%%%%%%%%%%%%%%%%#
 #### TEXTCLEANER ####
 #%%%%%%%%%%%%%%%%%%%#
@@ -641,6 +1387,18 @@ yes.no.menu <- function (title = NULL)
 #' 
 #' @param data Matrix or data frame.
 #' Matrix of raw data
+#' 
+#' @param type Character vector.
+#' Type of task to be preprocessed.
+#' \itemize{
+#' 
+#' \item{\code{"fluency"}}
+#' {Verbal fluency data (e.g., categories, phonological, synonyms)}
+#' 
+#' \item{\code{"free"}}
+#' {Free association data (e.g., cue terms or words)}
+#' 
+#' }
 #' 
 #' @return A list containing:
 #' 
@@ -654,14 +1412,14 @@ yes.no.menu <- function (title = NULL)
 #' @noRd
 #' 
 # ID identifier
-# Updated 10.04.2020
-obtain.id <- function (data)
+# Updated 21.10.2021
+obtain.id <- function (data, type)
 {
   # Check for named column
   named.id <- c("subject", "id", "participant", "part", "sub")
   
-  if(any(named.id %in% tolower(colnames(data))))
-  {id.col <- na.omit(match(named.id, tolower(colnames(data))))
+  if(any(named.id %in% tolower(colnames(data)))){
+    id.col <- na.omit(match(named.id, tolower(colnames(data))))
   }else{
     
     # Check for variable with unique values
@@ -673,29 +1431,48 @@ obtain.id <- function (data)
     
   }
   
-  if(exists("id.col", envir = environment()))
-  {
-    # Grab unique identifier
-    ids <- data[,id.col]
+  if(type == "fluency"){
     
-    # Let user know what IDs refer to
-    message(paste("\nIDs refer to variable:", " '", colnames(data)[id.col], "'", sep = ""))
+    if(exists("id.col", envir = environment()))
+    {
+      # Grab unique identifier
+      ids <- data[,id.col]
+      
+      # Let user know what IDs refer to
+      message(paste("\nIDs refer to variable:", " '", colnames(data)[id.col], "'", sep = ""))
+      
+      # Remove unique identifier from data
+      data <- data[,-id.col]
+    }else{
+      # Make rows the IDs
+      ids <- 1:nrow(data)
+      
+      # Let user know what IDs refer to
+      message("\nIDs refer to row number")
+    }
     
-    # Remove unique identifier from data
-    data <- data[,-id.col]
-  }else{
-    # Make rows the IDs
-    ids <- 1:nrow(data)
+  }else if(type == "free"){
     
-    # Let user know what IDs refer to
-    message("\nIDs refer to row number")
+    if(exists("id.col", envir = environment()))
+    {
+      # Grab unique identifier
+      ids <- unique(data[,id.col])
+      
+      # Let user know what IDs refer to
+      message(paste("\nIDs refer to variable:", " '", colnames(data)[id.col], "'", sep = ""))
+      
+    }else{
+      # Let user know what IDs refer to
+      message("\nNo IDs were identified in data. Please name ID column as \"ID\"")
+    }
+    
   }
   
   # Initialize result list
   res <- list()
   res$data <- data
   res$ids <- ids
-  
+
   return(res)
 }
 
@@ -708,6 +1485,18 @@ obtain.id <- function (data)
 #' 
 #' @param miss Character or numeric
 #' 
+#' @param type Character vector.
+#' Type of task to be preprocessed.
+#' \itemize{
+#' 
+#' \item{\code{"fluency"}}
+#' {Verbal fluency data (e.g., categories, phonological, synonyms)}
+#' 
+#' \item{\code{"free"}}
+#' {Free association data (e.g., cue terms or words)}
+#' 
+#' }
+#' 
 #' @return Matrix with missing values replaced with \code{""}
 #' 
 #' @author Alexander Christensen <alexpaulchristensen@gmail.com>
@@ -715,20 +1504,38 @@ obtain.id <- function (data)
 #' @noRd
 #' 
 # Convert missing data
-# Updated 10.04.2020
-convert.miss <- function (data, miss)
+# Updated 21.10.2021
+convert.miss <- function (data, miss, type)
 {
   # Convert to matrix
   data <- as.matrix(data)
   
-  # Change missing responses to NA
-  data <- ifelse(data == paste(miss), NA, data)
-  
-  # Change bad responses to NA
-  data <- apply(data, 2, bad.response)
-  
-  # Change NAs in data to ""
-  data <- ifelse(is.na(data), "", data)
+  if(type == "fluency"){
+    
+    # Change missing responses to NA
+    data <- ifelse(data == paste(miss), NA, data)
+    
+    # Change bad responses to NA
+    data <- apply(data, 2, bad.response)
+    
+    # Change NAs in data to ""
+    data <- ifelse(is.na(data), "", data)
+    
+  }else if(type == "free"){
+    
+    # Target response
+    responses <- data[,"Response"]
+    
+    # Change missing responses to NA
+    responses <- ifelse(responses == paste(miss), NA, responses)
+    
+    # Change bad responses to NA
+    responses <- bad.response(responses)
+    
+    # Change NAs in data to ""
+    data[,"Response"] <- ifelse(is.na(responses), "", responses)
+    
+  }
   
   return(data)
 }
@@ -756,6 +1563,18 @@ convert.miss <- function (data, miss)
 #' Defaults to \code{TRUE}.
 #' Set to \code{FALSE} to keep words as they are
 #' 
+#' @param type Character vector.
+#' Type of task to be preprocessed.
+#' \itemize{
+#' 
+#' \item{\code{"fluency"}}
+#' {Verbal fluency data (e.g., categories, phonological, synonyms)}
+#' 
+#' \item{\code{"free"}}
+#' {Free association data (e.g., cue terms or words)}
+#' 
+#' }
+#' 
 #' @return Data frame prepped for \code{spellcheck.dictionary}
 #' 
 #' @author Alexander Christensen <alexpaulchristensen@gmail.com>
@@ -763,50 +1582,104 @@ convert.miss <- function (data, miss)
 #' @noRd
 #' 
 # Prep for spellcheck.dictionary
-# Updated 06.08.2021
-prep.spellcheck.dictionary <- function (data, allowPunctuations, allowNumbers, lowercase)
+# Updated 21.10.2021
+prep.spellcheck.dictionary <- function (
+  data, allowPunctuations,
+  allowNumbers, lowercase,
+  type
+)
 {
-  # Remove miscellaneous string additions from data
-  ## Remove/allow punctuation
-  if(all(allowPunctuations != "all")){
-    characters <- paste("([", paste(allowPunctuations, collapse = ""), "])|[[:punct:]]", sep = "", collapse = "")
-    data <- apply(data, 2, function(y) gsub(characters, "\\1", y))
+  
+  if(type == "fluency"){
+    
+    # Remove miscellaneous string additions from data
+    ## Remove/allow punctuation
+    if(all(allowPunctuations != "all")){
+      characters <- paste("([", paste(allowPunctuations, collapse = ""), "])|[[:punct:]]", sep = "", collapse = "")
+      data <- apply(data, 2, function(y) gsub(characters, "\\1", y))
+    }
+    
+    ## Remove/allow numbers
+    if(!isTRUE(allowNumbers)){
+      data <- apply(data, 2, function(y) gsub("[[:digit:]]+", "", y))
+    }
+    
+    # Remove white spaces
+    data <- apply(apply(data, 2, trimws), 1:2, rm.lead.space)
+    
+    # Change all to lowercase
+    if(isTRUE(lowercase)){
+      data <- apply(data, 2, tolower)
+    }
+    
+    # Remove new lines
+    data <- apply(data, 2, function(y) gsub("[\n\r\t]",  " ", y))
+    
+    # Remove special characters
+    ## Split words
+    data <- apply(data, 2, strsplit, split = " ")
+    ## Remove special characters
+    data <- lapply(data, function(y){
+      lapply(y, function(y) gsub("[^\x20-\x7E]", "", y))
+    })
+    ## Re-combine words
+    data <- lapply(data, function(y){
+      lapply(y, paste, sep = "", collapse = " ")
+    })
+    ## Back into matrix
+    data <- simplify2array(data, higher = FALSE)
+    ## Revert NAs
+    data <- apply(data, 1:2, function(y){ifelse(y == "NA", NA, unlist(y))})
+    
+    # Convert to data frame
+    data <- as.data.frame(data, stringsAsFactors = FALSE)
+    
+  }else if(type == "free"){
+    
+    response <- data[,"Response"]
+    
+    # Remove miscellaneous string additions from data
+    ## Remove/allow punctuation
+    if(all(allowPunctuations != "all")){
+      characters <- paste("([", paste(allowPunctuations, collapse = ""), "])|[[:punct:]]", sep = "", collapse = "")
+      response <- gsub(characters, "\\1", response)
+    }
+    
+    ## Remove/allow numbers
+    if(!isTRUE(allowNumbers)){
+      response <- gsub("[[:digit:]]+", "", response)
+    }
+    
+    # Remove white spaces
+    response <- unlist(lapply(
+      trimws(response), rm.lead.space
+    ))
+      
+    # Change all to lowercase
+    if(isTRUE(lowercase)){
+      response <- tolower(response)
+    }
+    
+    # Remove new lines
+    response <- gsub("[\n\r\t]",  " ", response)
+    
+    # Remove special characters
+    ## Split words
+    response <- strsplit(response, split = " ") 
+    ## Remove special characters
+    response <- lapply(response, function(y){
+      gsub("[^\x20-\x7E]", "", y)
+    })
+    ## Re-combine words
+    response <- unlist(lapply(response, paste, sep = "", collapse = " "))
+    ## Revert NAs
+    response <- ifelse(response == "NA", NA, response)
+    ## Back into matrix
+    data[,"Response"] <- response
+    # Convert to data frame
+    data <- as.data.frame(data, stringsAsFactors = FALSE)
+    
   }
-  
-  ## Remove/allow numbers
-  if(!isTRUE(allowNumbers)){
-    data <- apply(data, 2, function(y) gsub("[[:digit:]]+", "", y))
-  }
-  
-  # Remove white spaces
-  data <- apply(apply(data, 2, trimws), 1:2, rm.lead.space)
-  
-  # Change all to lowercase
-  if(isTRUE(lowercase)){
-    data <- apply(data, 2, tolower)
-  }
-  
-  # Remove new lines
-  data <- apply(data, 2, function(y) gsub("[\n\r\t]",  " ", y))
-  
-  # Remove special characters
-  ## Split words
-  data <- apply(data, 2, strsplit, split = " ")
-  ## Remove special characters
-  data <- lapply(data, function(y){
-    lapply(y, function(y) gsub("[^\x20-\x7E]", "", y))
-  })
-  ## Re-combine words
-  data <- lapply(data, function(y){
-    lapply(y, paste, sep = "", collapse = " ")
-  })
-  ## Back into matrix
-  data <- simplify2array(data, higher = FALSE)
-  ## Revert NAs
-  data <- apply(data, 1:2, function(y){ifelse(y == "NA", NA, unlist(y))})
-  
-  # Convert to data frame
-  data <- as.data.frame(data, stringsAsFactors = FALSE)
   
   return(data)
 }
@@ -859,7 +1732,7 @@ ind.word.check <- function (string, full.dict, dictionary, spelling)
   resp <- paste(unlist(guesses), collapse = " ")
   
   # Re-check for misnomers
-  # Check if any dictionaries were improted from SemNetDictionaries
+  # Check if any dictionaries were imported from SemNetDictionaries
   if(any(dictionary %in% SemNetDictionaries::dictionaries(TRUE)))
   {resp <- moniker(word = resp, misnom = SemNetDictionaries::load.monikers(dictionary), spelling = spelling)}
   
@@ -875,7 +1748,7 @@ ind.word.check <- function (string, full.dict, dictionary, spelling)
 #' A vector with words to potentially be de-combined
 #' 
 #' @param multi.min Numeric.
-#' Length of multiple word resposnes in the dictionary
+#' Length of multiple word responses in the dictionary
 #' 
 #' @param full.dict Character vector.
 #' Dictionary entries
@@ -894,24 +1767,47 @@ ind.word.check <- function (string, full.dict, dictionary, spelling)
 #' 
 #' @noRd
 # Multiple words
-# Updated 01.12.2020
-multiple.words <- function (vec, multi.min, full.dict, dictionary, spelling)
+# Updated 21.06.2022
+multiple.words <- function (
+    vec, multi.min, full.dict,
+    dictionary, spelling,
+    keepStrings = FALSE
+)
 {
+  # Original word
+  original_word <- vec
+  
   # Split vector
   spl <- unlist(strsplit(vec, " "))
   
   # Remove bad responses
   spl <- na.omit(bad.response(spl))
   
+  # Try to combine multiple words
+  combined <- paste(spl, sep = "", collapse = "")
+  
+  # Initialize result list
+  res <- list()
+  
+  # Check if combined exists
+  if(combined %in% full.dict){
+    
+    res$response <- combined
+    res$correct <- TRUE
+    
+    return(res)
+    
+  }
+  
   # Check for multiple words
-  if(length(spl) >= multi.min)
-  {
+  if(length(spl) >= multi.min){
+    
     # Identify words not in dictionary
     misspl <- which(!spl %in% full.dict)
     
     # Loop through checking for combination of words
-    for(i in misspl)
-    {
+    for(i in misspl){
+      
       # Individual check
       ind <- FALSE
       
@@ -922,15 +1818,14 @@ multiple.words <- function (vec, multi.min, full.dict, dictionary, spelling)
       ind.guess <- best.guess(spl[i], full.dictionary = full.dict, dictionary = dictionary)
       
       ## Update based on individual guess
-      if(length(ind.guess) == 1)
-      {
+      if(length(ind.guess) == 1){
         spl[i] <- ind.guess
         ind <- TRUE
       }
       
       ## Check for words before and after word
-      if(i != 1)
-      {
+      if(i != 1){
+        
         ### Check before
         spacing <- c(paste(spl[i-1], spl[i]), paste(spl[i-1], spl[i], sep = ""))
         
@@ -938,12 +1833,14 @@ multiple.words <- function (vec, multi.min, full.dict, dictionary, spelling)
         spacing <- unique(unlist(lapply(spacing, moniker, dictionary, spelling = spelling)))
         
         ### Check for only one solution
-        if(sum(spacing %in% full.dict) == 1)
-        {multi[1] <- spacing[which(spacing %in% full.dict)]}
+        if(sum(spacing %in% full.dict) == 1){
+          multi[1] <- spacing[which(spacing %in% full.dict)]
+        }
+        
       }
       
-      if(i != length(spl))
-      {
+      if(i != length(spl)){
+        
         ### Check before
         spacing <- c(paste(spl[i], spl[i+1]), paste(spl[i], spl[i+1], sep = ""))
         
@@ -951,46 +1848,79 @@ multiple.words <- function (vec, multi.min, full.dict, dictionary, spelling)
         spacing <- unique(unlist(lapply(spacing, moniker, dictionary, spelling = spelling)))
         
         ### Check for only one solution
-        if(sum(spacing %in% full.dict) == 1)
-        {multi[2] <- spacing[which(spacing %in% full.dict)]}
+        if(sum(spacing %in% full.dict) == 1){
+          multi[2] <- spacing[which(spacing %in% full.dict)]
+        }
+        
       }
       
       # Verify singular multi-word solution
-      if(multi[1] %in% full.dict && !multi[2] %in% full.dict)
-      {
+      if(multi[1] %in% full.dict && !multi[2] %in% full.dict){
+        
         ## Change response
         spl[i] <- multi[1]
         
         ## Remove previous response
         spl <- spl[-(i-1)]
         
-      }else if(!multi[1] %in% full.dict && multi[2] %in% full.dict)
-      {
+      }else if(!multi[1] %in% full.dict && multi[2] %in% full.dict){
+        
         ## Change response
         spl[i] <- multi[2]
         
         ## Remove previous response
         spl <- spl[-(i+1)]
+        
       }
+      
     }
     
     # Check for common misspellings and monikers
     vec <- unlist(lapply(spl, moniker, misnom = SemNetDictionaries::load.monikers(dictionary), spelling = spelling))
-  }else if(length(spl) > 1)
-  {
+  
+  }else if(length(spl) > 1){
+    
     # Correct if only one best guess exists
     guess <- best.guess(vec, full.dictionary = full.dict, dictionary = dictionary)
     
     if(length(guess) == 1)
     {vec <- guess}
+    
   }
   
-  # Initialize result list
-  res <- list()
-  res$response <- unique(vec)
-  res$correct <- unique(vec) %in% full.dict
+  # Check for keeping strings
+  if(isTRUE(keepStrings)){
+    
+    # Combine words
+    combined_word <- paste(
+      vec, sep = "", collapse = " "
+    )
+    
+    # Check against original word
+    if(
+      original_word == combined_word &
+      !all(unique(vec) %in% full.dict)
+    ){
+      
+        res$response <- original_word
+        res$correct <- FALSE
+      
+    }else{
+      
+      res$response <- combined_word
+      res$correct <- TRUE
+      
+    }
+
+  }else{
+    
+    res$response <- unique(vec)
+    res$correct <- unique(vec) %in% full.dict
+    
+  }
   
   return(res)
+  
 }
 
 #' Response splitter
@@ -1719,14 +2649,19 @@ textcleaner_help <- function(check, context, original, possible)
   readline("Press ENTER to get back to manual spell-check...")
 }
 
-#' Taken from editData version 0.2.1
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%#
+#### editData package functions ####
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%#
+
+# TAKEN FROM editData VERSION 0.1.8 on December 11th, 2021
+# Enables manual entry with double mouse click
 #' 
 #' @noRd
 # Edit Data
-# Updated 15.08.2021
-SemNetCleanerEdit <- function()
+# Updated 12.12.2021
+AutomatedEdit <- function()
 {
-  shiny::runApp(appDir = system.file("Shiny", package="SemNetCleaner"))
+  shiny::runApp(appDir = system.file("Automated", package="SemNetCleaner"))
 }
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%#
@@ -1762,7 +2697,7 @@ SemNetCleanerEdit <- function()
 #' 
 #' @noRd
 # Automated Spell-check
-# Updated 02.01.2020
+# Updated 22.12.2021
 auto.spellcheck <- function(check, full.dict, dictionary, spelling, keepStrings)
 {
   # Change names of indices
@@ -1822,9 +2757,6 @@ auto.spellcheck <- function(check, full.dict, dictionary, spelling, keepStrings)
     auto.spell <- names(check)
   }
   
-  # Add artificial pause for smoother feel
-  Sys.sleep(0.50)
-  
   # Let user know
   message(paste("done.\n(", length(check), " of ", length(orig), " unique responses still need to be corrected)", sep = ""))
   
@@ -1837,7 +2769,7 @@ auto.spellcheck <- function(check, full.dict, dictionary, spelling, keepStrings)
   
   # Index pluralized responses
   ## Singularize responses
-  sing <- lapply(check, singularize)
+  sing <- lapply(check, singularize, dictionary = FALSE)
   
   ## Identify responses found in dictionary
   ## Check if all are spelled correctly or incorrectly
@@ -1883,9 +2815,6 @@ auto.spellcheck <- function(check, full.dict, dictionary, spelling, keepStrings)
     sing <- orig[-as.numeric(names.ind)]
   }
   
-  # Add artificial pause for smoother feel
-  Sys.sleep(0.50)
-  
   # Let user know
   message(paste("done.\n(", length(sing), " unique responses still need to be corrected)", sep = ""))
   
@@ -1893,7 +2822,7 @@ auto.spellcheck <- function(check, full.dict, dictionary, spelling, keepStrings)
   ## Correct common misspellings and monikers ##
   #--------------------------------------------#
   
-  if(all(dictionary == "general")){
+  if(all(dictionary == "general") | all(dictionary == "hunspell")){
     
     mons2 <- sing
     
@@ -2007,11 +2936,7 @@ auto.spellcheck <- function(check, full.dict, dictionary, spelling, keepStrings)
         }
         
       }
-      
-      
-      # Add artificial pause for smoother feel
-      Sys.sleep(0.50)
-      
+
       # Let user know
       message("done.")
       
@@ -2030,9 +2955,41 @@ auto.spellcheck <- function(check, full.dict, dictionary, spelling, keepStrings)
   # Let user know
   message(paste("\nAttempting to auto-correct the remaining", length(mons2),"responses individually..."), appendLF = FALSE)
   
-  # Spell-check each individual word within the list (including multiple word responses)
-  ind.check <- unlist(lapply(mons2, ind.word.check, full.dict = full.dict, dictionary = dictionary, spelling = spelling), recursive = FALSE)
+  # Message for large number of responses remaining
+  message("\nUsing parallel processing to speed up individual word check...")
   
+  # Number of cores
+  ncores <- parallel::detectCores() / 2
+  
+  # Set up clusters
+  cl <- parallel::makeCluster(ncores)
+  
+  # Functions
+  # funcs <- c(
+  #   "bad.response", "best.guess",
+  #   "moniker"
+  # )
+  # 
+  # # Export functions
+  # parallel::clusterExport(
+  #   cl = cl, funcs,
+  #   envir = as.environment(asNamespace("SemNetCleaner"))
+  # )
+  
+  # Spell-check each individual word within the list (including multiple word responses)
+  ind.check <- unlist(
+    pbapply::pblapply(
+      mons2, ind.word.check,
+      full.dict = full.dict,
+      dictionary = dictionary,
+      spelling = spelling,
+      cl = cl
+    ),
+    recursive = FALSE
+  )
+  
+  parallel::stopCluster(cl)
+
   ## Identify responses found in dictionary
   ## Check if all are spelled correctly or incorrectly
   targets <- match(unlist(ind.check), full.dict)
@@ -2079,7 +3036,7 @@ auto.spellcheck <- function(check, full.dict, dictionary, spelling, keepStrings)
   }
   
   # Let user know
-  message(paste("done.\n(", length(ind.check), " unique responses still need to be corrected)", sep = ""))
+  message(paste("(", length(ind.check), " unique responses still need to be corrected)", sep = ""))
   
   #-------------------------------------------#
   ## Parse strings with multi-word responses ##
@@ -2099,8 +3056,36 @@ auto.spellcheck <- function(check, full.dict, dictionary, spelling, keepStrings)
     multi.min <- 2
   }
   
-  # Search through responses with more than minimum words (varies based on dictionary)
-  multi.word <- lapply(ind.check, multiple.words, multi.min = multi.min, full.dict = full.dict, dictionary = dictionary, spelling = spelling)
+  # Message for large number of responses remaining
+  message("\nUsing parallel processing to speed up mutiple word check...")
+  
+  # Number of cores
+  ncores <- parallel::detectCores() / 2
+  
+  # Set up clusters
+  cl <- parallel::makeCluster(ncores)
+  
+  # Functions
+  # funcs <- c(
+  #   "bad.response", "best.guess",
+  #   "moniker"
+  # )
+  # 
+  # # Export functions
+  # parallel::clusterExport(
+  #   cl = cl, funcs,
+  #   envir = as.environment(asNamespace("SemNetCleaner"))
+  # )
+  
+  # Spell-check each individual word within the list (including multiple word responses)
+  multi.word <- pbapply::pblapply(
+    ind.check, multiple.words,
+    multi.min = multi.min, full.dict = full.dict,
+    dictionary = dictionary, spelling = spelling,
+    cl = cl
+  )
+  
+  parallel::stopCluster(cl)
   
   ## Identify responses found in dictionary
   ### Check responses that changed
@@ -2163,9 +3148,6 @@ auto.spellcheck <- function(check, full.dict, dictionary, spelling, keepStrings)
     multi.word <- orig[-as.numeric(names.ind)]
   }
   
-  # Let user know
-  message("done")
-  
   # Let user know how many responses need to be spell-checked
   if(length(multi.word) != 0){
     message(paste("\nAutomated spell-checking complete.\nAbout ",length(multi.word)," responses still need to be manually spell-checked", sep = ""))
@@ -2177,7 +3159,544 @@ auto.spellcheck <- function(check, full.dict, dictionary, spelling, keepStrings)
   res <- list()
   
   res$manual <- as.numeric(names(multi.word))
-  res$auto <- setdiff(as.numeric(names(check)), res$manual)
+  res$auto <- setdiff(as.numeric(full.names), res$manual)
+  res$to <- orig
+  
+  return(res)
+}
+
+# Automated Spell-check
+# Updated 21.06.2022
+auto.spellcheck.free <- function(
+    check, full.dict, dictionary,
+    spelling, keepStrings, keepLength
+)
+{
+  # Change names of indices
+  names(check) <- formatC(1:length(check),
+                          width = nchar(as.character(length(check))),
+                          format = "d", flag = "0")
+  
+  # Keep full indices
+  full.names <- names(check)
+  
+  # Save original responses
+  orig <- check
+  
+  #-------------------------------#
+  ## Correctly spelled responses ##
+  #-------------------------------#
+  
+  # Let user know
+  message("\nIdentifying correctly spelled responses...", appendLF = FALSE)
+  
+  # Index correctly and incorrectly spelled responses
+  ## Check if all are spelled correctly or incorrectly
+  targets <- match(unlist(check), full.dict)
+  
+  if(all(is.na(targets))){ # All spelled incorrectly
+    
+    check <- orig
+    auto.spell <- names(check)
+    
+  }else if(all(!is.na(targets))){ # All spelled correctly
+    
+    ind <- 1:length(check)
+    names.ind <- names(check)[ind]
+    
+    # Message
+    message("\n\nAll words passed automated spell-check. Ending spell-check...")
+    
+    # Initialize result list
+    res <- list()
+    
+    res$manual <- as.numeric()
+    auto <- matrix("", nrow = 0, ncol = 2)
+    colnames(auto) <- c("from", "to_1")
+    res$auto <- auto
+    res$to <- orig
+    
+    return(res)
+    
+  }else{
+    
+    ## Get indices
+    ind <- which(!is.na(targets))
+    names.ind <- names(check)[ind]
+    
+    # Remove responses from original
+    check <- orig[-as.numeric(names.ind)]
+    auto.spell <- names(check)
+  }
+  
+  # Let user know
+  message(paste("done.\n(", length(check), " of ", length(orig), " unique responses still need to be corrected)", sep = ""))
+  
+  #---------------------------#
+  ## Short and bad responses ##
+  #---------------------------#
+  
+  # Remove stop words
+  ## stop words
+  stop_words <- SemNetDictionaries::load.dictionaries("stop_words")
+  ## format stop words for gsub
+  stop_format <- paste("\\b", stop_words, "\\b", sep = "", collapse = "|")
+  ## replace
+  uniq.resp <- gsub(stop_format, "", unlist(check))
+  ## make sure spaces at beginning and end are removed
+  uniq.resp <- trimws(uniq.resp)
+  ## remove bad words
+  bad.uniq.resp <- bad.response(uniq.resp)
+  bad.index <- which(is.na(bad.uniq.resp))
+  
+  # Remove single letters
+  rm_letters <- letters[!letters %in% full.dict]
+  one.index <- which(uniq.resp %in% rm_letters)
+  
+  # Remove two letters
+  two_letters <- apply(expand.grid(letters, letters), 1, paste, collapse = "", sep = "")
+  rm_letters <- two_letters[!two_letters %in% full.dict]
+  two.index <- which(uniq.resp %in% rm_letters)
+  
+  # Concatenate bad indices
+  na.index <- unique(sort(c(bad.index, one.index, two.index)))
+  names(na.index) <- names(uniq.resp)[na.index]
+  
+  ## Update original responses
+  orig[names(na.index)] <- NA
+  
+  ## Update correctly spelled indices
+  names.ind <- unique(sort(c(names.ind, names(na.index))))
+  
+  # Remove responses from check
+  check <- check[setdiff(names(check), names(na.index))]
+  auto.spell <- names(check)
+  
+  #------------------------#
+  ## Pluralized responses ##
+  #------------------------#
+  
+  # Let user know
+  message("\nSingularizing responses...", appendLF = FALSE)
+  
+  # Index pluralized responses
+  ## Singularize responses
+  sing <- lapply(check, singularize, dictionary = FALSE)
+  
+  ## Identify responses found in dictionary
+  ## Check if all are spelled correctly or incorrectly
+  targets <- match(unlist(sing), full.dict)
+  
+  if(all(is.na(targets))){ # All spelled incorrectly
+    
+    sing <- check
+    auto.spell <- names(sing)
+    
+  }else if(all(!is.na(targets))){ # All spelled correctly
+    
+    ## Get indices
+    ind2 <- which(!is.na(targets))
+    
+    ## Update original responses
+    orig[names(sing)[ind2]] <- sing[ind2]
+    
+    # Message
+    message("\n\nAll words passed automated spell-check. Ending spell-check...")
+    
+    # Initialize result list
+    res <- list()
+    
+    res$manual <- as.numeric()
+    res$auto <- setdiff(as.numeric(names(check)), res$manual)
+    res$to <- orig
+    
+    return(res)
+    
+  }else{
+    
+    ## Get indices
+    ind2 <- which(!is.na(targets))
+    
+    ## Update original responses
+    orig[names(sing)[ind2]] <- sing[ind2]
+    
+    ## Update correctly spelled indices
+    names.ind <- sort(c(names.ind, names(sing)[ind2]))
+    
+    ## Update singularized responses
+    sing <- orig[-as.numeric(names.ind)]
+  }
+  
+  # Let user know
+  message(paste("done.\n(", length(sing), " unique responses still need to be corrected)", sep = ""))
+  
+  #--------------------------------------------#
+  ## Correct common misspellings and monikers ##
+  #--------------------------------------------#
+  
+  if(all(dictionary == "general") | all(dictionary == "hunspell")){
+    
+    mons2 <- sing
+    
+  }else{
+    
+    # Check if any dictionaries were improted from SemNetDictionaries
+    if(any(dictionary %in% SemNetDictionaries::dictionaries(TRUE))){
+      
+      # Let user know
+      message("\nAuto-correcting common misspellings and monikers...", appendLF = FALSE)
+      
+      # Load moniker
+      monik <- SemNetDictionaries::load.monikers(dictionary)
+      
+      if(length(monik)!=0){ # Checks in case of only using general dictionary
+        
+        ## Check for monikers
+        mons <- unlist(lapply(sing, moniker, monik, spelling = spelling), recursive = FALSE)
+        
+        ## Identify responses found in dictionary
+        ## Check if all are spelled correctly or incorrectly
+        targets <- match(unlist(mons), full.dict)
+        
+        if(all(is.na(targets))){ # All spelled incorrectly
+          
+          mons <- sing
+          auto.spell <- names(mons)
+          
+        }else if(all(!is.na(targets))){ # All spelled correctly
+          
+          ## Get indices
+          ind3 <- which(!is.na(targets))
+          
+          ## Update original responses
+          orig[names(mons)[ind3]] <- mons[ind3]
+          
+          # Message
+          message("\n\nAll words passed automated spell-check. Ending spell-check...")
+          
+          # Initialize result list
+          res <- list()
+          
+          res$manual <- as.numeric()
+          res$auto <- setdiff(as.numeric(names(sing)), res$manual)
+          res$to <- orig
+          
+          return(res)
+          
+        }else{
+          
+          ## Get indices
+          ind3 <- which(!is.na(targets))
+          
+          ## Update original responses
+          orig[names(mons)[ind3]] <- mons[ind3]
+          
+          ## Update correctly spelled indices
+          names.ind <- sort(c(names.ind, names(mons)[ind3]))
+          
+          ## Update singularized responses
+          mons <- orig[-as.numeric(names.ind)]
+          
+        }
+        
+        ## Check for pluralized monikers
+        mons2 <- unlist(lapply(mons, function(x, monik, spelling){moniker(singularize(x, dictionary = FALSE), monik, spelling)}, monik, spelling = spelling), recursive = FALSE)
+        
+        ## Identify responses found in dictionary
+        ## Check if all are spelled correctly or incorrectly
+        targets <- match(unlist(mons2),full.dict)
+        
+        if(all(is.na(targets))){ # All spelled incorrectly
+          
+          mons2 <- mons
+          auto.spell <- names(mons2)
+          
+        }else if(all(!is.na(targets))){ # All spelled correctly
+          
+          ## Get indices
+          ind4 <- which(!is.na(targets))
+          
+          ## Update original responses
+          orig[names(mons2)[ind4]] <- mons2[ind4]
+          
+          # Message
+          message("\n\nAll words passed automated spell-check. Ending spell-check...")
+          
+          # Initialize result list
+          res <- list()
+          
+          res$manual <- as.numeric()
+          res$auto <- setdiff(as.numeric(names(mons2)), res$manual)
+          res$to <- orig
+          
+          return(res)
+          
+        }else{
+          
+          ## Get indices
+          ind4 <- which(!is.na(targets))
+          
+          ## Update original responses
+          orig[names(mons2)[ind4]] <- mons2[ind4]
+          
+          ## Update correctly spelled indices
+          names.ind <- sort(c(names.ind, names(mons2)[ind4]))
+          
+          ## Update singularized responses
+          mons2 <- orig[-as.numeric(names.ind)]
+          
+        }
+        
+      }
+      
+      # Let user know
+      message("done.")
+      
+    }else{
+      
+      mons2 <- sing
+      
+    }
+    
+  }
+  
+  #------------------------------#
+  ## Individualized spell-check ##
+  #------------------------------#
+  
+  # Let user know
+  message(paste("\nAttempting to auto-correct the remaining", length(mons2),"responses individually..."), appendLF = FALSE)
+  
+  # Message for large number of responses remaining
+  message("\nUsing parallel processing to speed up individual word check...")
+  
+  # Number of cores
+  ncores <- parallel::detectCores() / 2
+  
+  # Set up clusters
+  cl <- parallel::makeCluster(ncores)
+
+  # Functions
+  funcs <- c(
+    "bad.response", "best.guess",
+    "moniker"
+  )
+
+  # Export functions
+  parallel::clusterExport(
+    cl = cl, funcs,
+    envir = as.environment(asNamespace("SemNetCleaner"))
+  )
+  
+  # Spell-check each individual word within the list (including multiple word responses)
+  ind.check <- unlist(
+    pbapply::pblapply(
+      mons2, ind.word.check,
+      full.dict = full.dict,
+      dictionary = dictionary,
+      spelling = spelling,
+      cl = cl
+    ),
+    recursive = FALSE
+  )
+  
+  parallel::stopCluster(cl)
+  
+  ## Identify responses found in dictionary
+  ## Check if all are spelled correctly or incorrectly
+  targets <- match(unlist(ind.check), full.dict)
+  
+  if(all(is.na(targets))){ # All spelled incorrectly
+    
+    ind.check <- mons2
+    auto.spell <- names(ind.check)
+    
+  }else if(all(!is.na(targets))){ # All spelled correctly
+    
+    ## Get indices
+    ind5 <- which(!is.na(targets))
+    
+    ## Update original responses
+    orig[names(ind.check)[ind5]] <- ind.check[ind5]
+    
+    # Message
+    message("\n\nAll words passed automated spell-check. Ending spell-check...")
+    
+    # Initialize result list
+    res <- list()
+    
+    res$manual <- as.numeric()
+    res$auto <- setdiff(as.numeric(names(ind.check)), res$manual)
+    res$to <- orig
+    
+    return(res)
+    
+  }else{
+    
+    ## Get indices
+    ind5 <- which(!is.na(targets))
+    
+    ## Update original responses
+    orig[names(ind.check)[ind5]] <- ind.check[ind5]
+    
+    ## Update correctly spelled indices
+    names.ind <- sort(c(names.ind, names(ind.check)[ind5]))
+    
+    ## Update individually checked responses
+    ind.check <- orig[-as.numeric(names.ind)]
+    
+  }
+  
+  # Let user know
+  message(paste("(", length(ind.check), " unique responses still need to be corrected)", sep = ""))
+  
+  #-------------------------------------------#
+  ## Parse strings with multi-word responses ##
+  #-------------------------------------------#
+  
+  if(is.null(keepLength) | keepLength > 1){
+    
+    # Let user know
+    message("\nParsing multi-word responses...", appendLF = FALSE)
+    
+    # Multiple word responses greater than in dictionary
+    dict.lens <- unlist(lapply(full.dict, function(x){length(unlist(strsplit(x, " ")))}))
+    
+    # Set multiple word minimum in response to be considered for split
+    multi.min <- ceiling(median(dict.lens) + 2 * sd(dict.lens))
+    
+    # Check for minimum length of 1
+    if(multi.min == 1){
+      multi.min <- 2
+    }
+    
+    # Message for large number of responses remaining
+    message("\nUsing parallel processing to speed up mutiple word check...")
+    
+    # Number of cores
+    ncores <- parallel::detectCores() / 2
+    
+    # Set up clusters
+    cl <- parallel::makeCluster(ncores)
+    
+    # Functions
+    funcs <- c(
+      "bad.response", "best.guess",
+      "moniker"
+    )
+    
+    # Export functions
+    parallel::clusterExport(
+      cl = cl, funcs,
+      envir = as.environment(asNamespace("SemNetCleaner"))
+    )
+    
+    # Spell-check each individual word within the list (including multiple word responses)
+    multi.word <- pbapply::pblapply(
+      ind.check, multiple.words,
+      multi.min = multi.min, full.dict = full.dict,
+      dictionary = dictionary, spelling = spelling,
+      keepStrings = keepStrings,
+      cl = cl
+    )
+    
+    parallel::stopCluster(cl)
+    
+    ## Identify responses found in dictionary
+    ### Check responses that changed
+    changed <- unlist(lapply(multi.word, function(x){
+      
+      if(any(x$correct)){
+        return(TRUE)
+      }else{
+        return(FALSE)
+      }
+      
+    }))
+    
+    ### Grab changed responses
+    responses <- unlist(multi.word, recursive = FALSE)[grep("response", names(unlist(multi.word, recursive = FALSE)))]
+    
+    ### Update original responses
+    if(!keepStrings){
+      if(length(responses[changed]) != 0){
+        orig[names(multi.word)[changed]] <- responses[changed]
+      }
+    }else{
+      
+      orig[names(changed[which(changed)])] <- 
+        lapply(multi.word[names(changed[which(changed)])], function(x){
+          x$response
+        })
+      
+    }
+    
+    ### Indices of correctly spelled responses
+    ind6 <- unlist(lapply(multi.word, function(x){
+      if(all(x$correct))
+      {return(TRUE)
+      }else{return(FALSE)}
+    }))
+    
+    if(length(names(multi.word)[ind6]) != 0){
+      
+      ## Update correctly spelled indices
+      names.ind <- sort(c(names.ind, names(multi.word)[ind6]))
+      
+      ## Update checked responses
+      multi.word <- orig[-as.numeric(names.ind)]
+      
+    }
+    
+    # Search through responses with more than 1 but can be individually split into separate responses
+    if(!isTRUE(keepStrings)){
+      
+      multi.word <- lapply(multi.word, response.splitter, full.dict = full.dict)
+      
+      ## Identify responses found in dictionary
+      ### Indices of correctly spelled responses
+      ind7 <- unlist(lapply(multi.word, function(x){
+        if(all(x %in% full.dict))
+        {return(TRUE)
+        }else{return(FALSE)}
+      }))
+      
+      if(length(multi.word[ind7]) != 0){
+        
+        ### Update original responses
+        orig[names(multi.word)[ind7]] <- multi.word[ind7]
+        
+        ## Update correctly spelled indices
+        names.ind <- sort(c(names.ind, names(multi.word)[ind7]))
+        
+        ## Update checked responses
+        multi.word <- orig[-as.numeric(names.ind)]
+      }
+      
+    }
+    
+  }else{
+    
+    multi.word <- ind.check
+    
+  }
+  
+  
+  
+  # Let user know how many responses need to be spell-checked
+  if(length(multi.word) != 0){
+    message(paste("\nAutomated spell-checking complete.\nAbout ",
+                  length(multi.word),
+                  " responses still need to be manually spell-checked", sep = ""))
+  }else{
+    message("\nAll words passed automaed spell-check. Ending spell-check...")
+  }
+  
+  # Initialize result list
+  res <- list()
+  
+  res$manual <- as.numeric(names(multi.word))
+  res$auto <- setdiff(as.numeric(full.names), res$manual)
   res$to <- orig
   
   return(res)
@@ -2342,7 +3861,7 @@ spellcheck.menu <- function (check, context = NULL, possible, original,
   # Check if word is already in dictionary (due to dictionary updates)
   ## Check for multiple words
   if(!is.null(context)){
-    dict.check <- context[check]
+    dict.check <- unique(context[check])
   }else{dict.check <- check}
   
   ## Check dictionary
@@ -2385,8 +3904,8 @@ spellcheck.menu <- function (check, context = NULL, possible, original,
     # Initialize END
     end <- FALSE
     
-    while(ans == 30)
-    {
+    while(ans == 30){
+      
       # Title for spell-check
       if(keepStrings){
         
@@ -2426,8 +3945,10 @@ spellcheck.menu <- function (check, context = NULL, possible, original,
       ans <- readline(prompt = "Selection (accepts lowercase): ")
       
       # Check for user stoppage
-      if(tolower(ans) == "x" || ans == "")
-      {return("STOP")}
+      if(tolower(ans) == "x" || ans == ""){return("STOP")}
+      
+      # Original answer 
+      original_ans <- tolower(ans)
       
       # Check for appropriate answer
       ans <- appropriate.answer(answer = ans, choices = choices, default = default)
@@ -2443,8 +3964,7 @@ spellcheck.menu <- function (check, context = NULL, possible, original,
       }
         
       # Answer options
-      if(ans == 1) # SKIP WORD
-      {
+      if(ans == 1){ # SKIP WORD
         
         ## Check for strings
         if(keepStrings){
@@ -2488,8 +4008,8 @@ spellcheck.menu <- function (check, context = NULL, possible, original,
           
         }
         
-      }else if(ans == 2) # ADD WORD TO DICTIONARY
-      {
+      }else if(ans == 2){ # ADD WORD TO DICTIONARY
+        
         ## Add response to dictionary
         full.dictionary <- SemNetDictionaries::append.dictionary(context[check],
                                                                  full.dictionary,
@@ -2533,8 +4053,8 @@ spellcheck.menu <- function (check, context = NULL, possible, original,
           
         }
         
-      }else if(ans == 3) # TYPE MY OWN WORD
-      {
+      }else if(ans == 3){ # TYPE MY OWN WORD{
+        
         message("\nType '30' (no quotations) to go back to the other response options\n")
         
         tmo <- readline(prompt = "Use commas for multiple words (dog, fish, etc.): ")
@@ -2642,8 +4162,8 @@ spellcheck.menu <- function (check, context = NULL, possible, original,
           
         }else{ans <- 30}
         
-      }else if(ans == 4) # GOOGLE WORD
-      {
+      }else if(ans == 4){ # GOOGLE WORD
+        
         # Use 'searcher' package
         searcher::search_site(paste(category, " '", context[check], "'", sep = "", collpase = ""),
                               site = "google", rlang = FALSE)
@@ -2651,8 +4171,8 @@ spellcheck.menu <- function (check, context = NULL, possible, original,
         # Renew prompt
         ans <- 30
         
-      }else if(ans == 5) # BAD WORD
-      {
+      }else if(ans == 5){ # BAD WORD
+        
         ## Set up change matrix
         change.mat <- t(as.matrix(c(context[check], NA)))
         colnames(change.mat) <- c("from", paste("to", 1:(ncol(change.mat)-1), sep = "_"))
@@ -2709,8 +4229,8 @@ spellcheck.menu <- function (check, context = NULL, possible, original,
         context.change[[check]] <- "NA"
         context <- unlist(context.change)
         
-      }else if(ans == 6) # KEEP ORIGINAL
-      {
+      }else if(ans == 6){ # KEEP ORIGINAL
+        
         ## Message user
         message(paste("\nString was REVERTED TO ORIGINAL:", paste("'", original, "'", sep = "")))
         
@@ -2754,8 +4274,8 @@ spellcheck.menu <- function (check, context = NULL, possible, original,
           }
         }
         
-      }else if(ans == 7) # KEEP AUTO-CORRECT
-      {
+      }else if(ans == 7){ # KEEP AUTO-CORRECT
+        
         ## Message user
         message(paste("\nString was KEPT AS AUTO-CORRECT:", paste("'", context, "'", sep = "", collapse = " ")))
         
@@ -2765,8 +4285,8 @@ spellcheck.menu <- function (check, context = NULL, possible, original,
         ## Update END
         end <- TRUE
         
-      }else if(ans == 8) # TYPE MY OWN STRING
-      {
+      }else if(ans == 8){ # TYPE MY OWN STRING
+        
         message("\nType '30' (no quotations) to go back to the other response options\n")
         
         ams <- readline(prompt = "Use commas for multiple words (dog, fish, etc.): ")
@@ -2837,8 +4357,8 @@ spellcheck.menu <- function (check, context = NULL, possible, original,
           
         }else{ans <- 30}
         
-      }else if(ans == 9) # GOOGLE STRING
-      {
+      }else if(ans == 9){ # GOOGLE STRING
+        
         # Use 'searcher' package
         searcher::search_site(paste(category, " '", original, "'", sep = "", collpase = ""),
                               site = "google", rlang = FALSE)
@@ -2846,8 +4366,8 @@ spellcheck.menu <- function (check, context = NULL, possible, original,
         # Renew prompt
         ans <- 30
         
-      }else if(ans == 10) # BAD STRING
-      {
+      }else if(ans == 10){ # BAD STRING
+        
         ## Set up change matrix
         change.mat <- cbind(context, rep(NA, length(context)))
         colnames(change.mat) <- c("from", paste("to", 1:(ncol(change.mat)-1), sep = "_"))
@@ -2863,10 +4383,10 @@ spellcheck.menu <- function (check, context = NULL, possible, original,
         ## Change responses in context
         context <- rep("NA", length(context))
         
-      }else if(ans == length(choices) + 1) # GO BACK
-      {go.back <- TRUE
-      }else if(ans == length(choices) + 2) # HELP
-      {
+      }else if(ans == length(choices) + 1 & original_ans == "b"){ # GO BACK
+        go.back <- TRUE
+      }else if(ans == length(choices) + 2 & original_ans == "h"){ # HELP
+        
         # Get `textcleaner` documentation
         textcleaner_help(check, context, original, possible)
         
@@ -3239,8 +4759,8 @@ spellcheck.dictionary <- function (uniq.resp = NULL, dictionary = NULL, spelling
       {category <- "synonym"
       }else if("animals" %in% target)
       {category <- "animals"
-      }else{category <- "general"}
-    }else{category <- "general"}
+      }else{category <- "define"}
+    }else{category <- "define"}
     
     # Load dictionaries
     ## Full dictionary
@@ -3319,6 +4839,7 @@ spellcheck.dictionary <- function (uniq.resp = NULL, dictionary = NULL, spelling
   }else{
     
     # Return analysis to previous state
+    type <- continue$type
     dictionary <- continue$dictionary
     full.dictionary <- continue$full.dictionary
     orig.dictionary <- continue$orig.dictionary
@@ -3470,6 +4991,7 @@ spellcheck.dictionary <- function (uniq.resp = NULL, dictionary = NULL, spelling
           res <- list()
           
           # Collect necessary objects
+          res$type <- "fluency"
           res$dictionary <- dictionary
           res$full.dictionary <- full.dictionary
           res$orig.dictionary <- orig.dictionary
@@ -3495,8 +5017,6 @@ spellcheck.dictionary <- function (uniq.resp = NULL, dictionary = NULL, spelling
           # Close progress bar
           close(pb)
           
-          Sys.sleep(2)
-          
           return(res)
           
         }else if(any(class(result) == "try-error"))
@@ -3508,6 +5028,7 @@ spellcheck.dictionary <- function (uniq.resp = NULL, dictionary = NULL, spelling
           res <- list()
           
           # Collect necessary objects
+          res$type <- "fluency"
           res$dictionary <- dictionary
           res$full.dictionary <- full.dictionary
           res$orig.dictionary <- orig.dictionary
@@ -3704,6 +5225,7 @@ spellcheck.dictionary <- function (uniq.resp = NULL, dictionary = NULL, spelling
         res <- list()
         
         # Collect necessary objects
+        res$type <- "fluency"
         res$dictionary <- dictionary
         res$full.dictionary <- full.dictionary
         res$orig.dictionary <- orig.dictionary
@@ -3742,6 +5264,7 @@ spellcheck.dictionary <- function (uniq.resp = NULL, dictionary = NULL, spelling
         res <- list()
         
         # Collect necessary objects
+        res$type <- "fluency"
         res$dictionary <- dictionary
         res$full.dictionary <- full.dictionary
         res$orig.dictionary <- orig.dictionary
@@ -4001,6 +5524,988 @@ spellcheck.dictionary <- function (uniq.resp = NULL, dictionary = NULL, spelling
   final.res$manual <- initial$manual
   final.res$auto <- initial$auto
   final.res$data <- data
+  final.res$type <- "fluency"
+  final.res$stop <- FALSE
+  
+  class(final.res) <- "textcleaner"
+  
+  return(final.res)
+}
+
+#' Spell-check using \code{\link{SemNetDictionaries}}
+#' 
+#' @description A sub-routine function for spell-checking text dictionaries in \code{\link{SemNetDictionaries}}
+#' (combines all spell-checking sub-routines)
+#' 
+#' @param uniq.resp Character vector.
+#' A vector of unique responses from text data
+#' 
+#' @param dictionary Character vector.
+#' See \code{\link{SemNetDictionaries}}
+#' 
+#' @param spelling Character vector.
+#' English spelling to be used.
+#' \itemize{
+#' 
+#' \item{\code{"UK"}}
+#' {For British spelling (e.g., colour)}
+#' 
+#' \item{\code{"US"}}
+#' {For American spelling (e.g., color)}
+#' 
+#' }
+#' 
+#' 
+#' @param add.path Character.
+#' Path to additional dictionaries to be found.
+#' DOES NOT search recursively (through all folders in path)
+#' to avoid time intensive search
+#' 
+#' @param data Matrix or data frame.
+#' A dataset of text data.
+#' Participant IDs will be automatically identified if they are included.
+#' If no IDs are provided, then their order in the corresponding
+#' row (or column is used). A message will notify the user how IDs were assigned
+#' 
+#' @param continue List.
+#' A result previously unfinished that still needs to be completed.
+#' Allows user to continue to manually spell-check their data
+#' after they closed or errored out of \code{\link[SemNetCleaner]{spellcheck.dictionary}}.
+#' Defaults to \code{NULL}
+#' 
+#' @param walkthrough Boolean.
+#' Whether a walkthrough should be provided (recommended for first time users).
+#' Defaults to \code{NULL}, which will ask whether you would like a walkthrough.
+#' Set to \code{TRUE} to do the walkthrough.
+#' Set to \code{FALSE} to skip the walkthrough
+#' 
+#' @return Returns a list containing:
+#' 
+#' \item{from}{A list of all unique responses before they were cleaned}
+#' 
+#' \item{to}{A list of all unique responses after they were spell-checked}
+#' 
+#' \item{manual}{Indices for responses that were manually spell-checked}
+#' 
+#' \item{auto}{Indices for responses that were automatically spell-checked}
+#' 
+#' \item{data}{Returned in case of continue so that \code{\link[SemNetCleaner]{textcleaner}}
+#' can continue with its process}
+#' 
+#' \item{dictionary}{Only appears \strong{if} the user requests their dictionary be
+#' returned in their results}
+#' 
+#' \item{stop}{\code{TRUE} or \code{FALSE} for whether the process was stopped}
+#' 
+#' @author Alexander Christensen <alexpaulchristensen@gmail.com>
+#' 
+#' @importFrom utils setTxtProgressBar txtProgressBar
+#' 
+#' @import SemNetDictionaries
+#' 
+#' @noRd
+# MANUAL spell-check
+# Updated 14.02.2022
+spellcheck.dictionary.free <- function (
+  uniq.resp = NULL, dictionary = "cocaspell", spelling = NULL,
+  add.path = NULL, keepStrings = NULL, keepLength = NULL, keepCue = FALSE,
+  data = NULL, continue = NULL
+)
+{
+  
+  # Continuation check
+  if(is.null(continue)){
+    
+    # Initialize 'from' list
+    from <- as.list(uniq.resp)
+    # Change names of indices
+    names(from) <- formatC(
+      1:length(from),
+      width = nchar(as.character(length(from))),
+      format = "d", flag = "0"
+    )
+    ## English conversion
+    #from <- brit.us.conv(from, spelling = spelling, dictionary = FALSE)
+    # Initialize 'to' list for changes
+    to <- from
+    
+    # Load dictionaries
+    ## Full dictionary
+    full.dictionary <- SemNetDictionaries::load.dictionaries("cocaspell")
+    category <- "define"
+    
+    ## English conversion
+    message(paste("\nConverting dictionary to '", spelling, "' spelling...", sep = ""), appendLF = FALSE)
+    full.dictionary <- brit.us.conv.vector(full.dictionary, spelling = spelling, dictionary = TRUE)
+    message("done")
+    
+    ## Save original dictionary (to compare against later)
+    orig.dictionary <- full.dictionary
+    
+    # Perform initial spell-check
+    initial <- try(
+      auto.spellcheck.free(
+        check = from
+        , full.dict = full.dictionary
+        , dictionary = dictionary
+        , spelling = spelling
+        , keepStrings = keepStrings
+        , keepLength = keepLength
+      ),
+      silent = TRUE
+    )
+    
+    # Error check
+    if(any(class(initial) == "try-error")){
+      error.fun(initial, "auto.spellcheck", "textcleaner")
+      res <- list()
+      res$stop <- TRUE
+    }
+    
+    # Current responses (after auto-correction phase)
+    ind <- initial$manual
+    auto.ind <- initial$auto
+    to <- initial$to
+    
+    # Create duplicate current responses (for GO BACK response option)
+    initial.to <- to
+    
+    # Organize indices so that multiple word responses are first
+    # and single word responses come after
+    if(keepStrings){
+      multi.ind <- which(lapply(to[ind], function(x){
+        length(unlist(strsplit(x, split = " ")))
+      }) >= 2)
+    }else{
+      multi.ind <- which(lapply(to[ind], length) >= 2)
+    }
+    
+    single.ind <- setdiff(ind, as.numeric(names(multi.ind)))
+    ind <- c(as.numeric(names(multi.ind)), single.ind)
+    
+    # Initialize changes list
+    changes <- list()
+    
+    # Initialize main counter
+    main.count <- 1
+    
+    # Initialize go back counter
+    go.back.count <- 1
+    
+    # Initialize go back reset
+    go.back.reset <- FALSE
+    
+  }else{
+    
+    # Return analysis to previous state
+    type <- continue$type
+    dictionary <- continue$dictionary
+    full.dictionary <- continue$full.dictionary
+    orig.dictionary <- continue$orig.dictionary
+    spelling <- continue$spelling
+    category <- continue$category
+    from <- continue$from
+    to <- continue$to
+    initial <- continue$initial
+    initial.to <- continue$initial.to
+    ind <- continue$ind
+    auto.ind <- continue$auto.ind
+    changes <- continue$changes
+    main.count <- continue$main.count
+    go.back.count <- continue$go.back.count
+    go.back.reset <- continue$go.back.reset
+    if(!is.null(continue$multi.count))
+    {multi.count <- continue$multi.count}
+    keepStrings <- continue$keepStrings
+    data <- continue$data
+    
+    # Do not run through walkthrough
+    #walkthrough <- FALSE
+  }
+  
+  # Check if manual spell-check is necessary
+  if(length(ind) != 0){
+    
+    ## Check for walkthrough
+    walk_through(FALSE)
+    
+    ## Set up progress bar (Windows only)
+    if(Sys.info()["sysname"] == "Windows")
+    {
+      pb <- tcltk::tkProgressBar(title = "R progress bar", label = "Spell-check progress",
+                                 min = 0, max = length(ind), initial = 0, width = 300)
+      invisible(tcltk::getTkProgressBar(pb))
+    }else{pb <- txtProgressBar(min = 0, max = length(ind), style = 3)}
+    
+    linebreak()
+  }
+  
+  # Loop through for manual spell-check
+  while(main.count != (length(ind) + 1)){
+    
+    # Set up target index
+    i <- ind[main.count]
+    
+    # Obtain target response(s)
+    target <- to[[i]]
+    
+    # Keep strings?
+    if(keepStrings){
+      target <- unlist(strsplit(target, split = " "))
+      target <- na.omit(ifelse(target == "", NA, target))
+    }
+    
+    # Branch based on number of words
+    if(length(target) > 1){
+      
+      # Check punctuation
+      target.punct <- gsub("[^[:alnum:][:space:]]", "", target)
+      
+      # Check "" and update check words
+      if(any(target.punct == "")){
+        target <- target[-which(target.punct == "")]
+        target.punct <- na.omit(ifelse(target.punct == "", NA, target.punct))
+        
+        # Check which words are spelled incorrectly
+        check.words <- target[which(!target.punct %in% full.dictionary)]
+        
+        # Check for no check words
+        if(length(check.words) == 0){
+          
+          # Combine into single word
+          target <- paste(target, collapse = " ")
+          
+          # Re-check
+          check.words <- target[!target %in% full.dictionary]
+        }
+        
+      }else{
+        
+        # Check which words are spelled incorrectly
+        check.words <- target[which(!target.punct %in% full.dictionary)]
+        
+        # Check if in previous correction
+        if(length(check.words) == 0){
+          
+          single_string <- paste(target.punct, collapse = " ")
+          
+          if(!single_string %in% unlist(to[1:i])){
+            
+            check.words <- target
+            
+          }
+          
+        }
+        
+      }
+      
+      # Initialize multi count
+      if(is.null(continue$multi.count)){
+        multi.count <- 1
+      }else{
+        continue$multi.count <- NULL
+      }
+      
+      # Check if words have been checked already
+      if(length(check.words) == 0){
+        
+        # Initialize results
+        result <- list()
+        
+        # Increase go back count
+        result$go.back.count <- go.back.count + 1
+        
+        if(keepStrings){
+          
+          ## Message that response was cleared by previous decision
+          message(paste("\nResponse '",
+                        styletext(paste(target, collapse = " "), defaults = "bold"),
+                        "' was KEPT AS IS based on a previous manual spell-check decision",
+                        sep = ""))
+          
+        }else{
+          
+          ## Message that response was cleared by previous decision
+          message(paste("\nResponse '",
+                        styletext(target, defaults = "bold"),
+                        "' was KEPT AS IS based on a previous manual spell-check decision",
+                        sep = ""))
+          
+        }
+        
+        ## Update go back count
+        if(result$go.back.count == go.back.count){
+          
+          ## If equal then check if reset is activated
+          if(go.back.reset){ ## If activated, then reset
+            go.back.count <- 1
+          }else{ ## If not activated, then activate
+            go.back.reset <- TRUE
+          }
+          
+        }else{
+          
+          ## Update count and do not reset
+          go.back.count <- result$go.back.count
+          go.back.reset <- FALSE
+          
+        }
+        
+        ## Line break
+        linebreak()
+        
+      }
+      
+      # Loop through words that need to be checked
+      while(multi.count != (length(check.words) + 1)){
+        
+        ## Run spell-check menu (with error capturing)
+        result <- try(
+          spellcheck.menu(check = which(check.words[multi.count] == target),
+                          context = target,
+                          possible = best.guess(unique(target[which(check.words[multi.count] == target)]),
+                                                full.dictionary = full.dictionary,
+                                                dictionary = dictionary),
+                          original = ifelse(keepStrings,
+                                            paste(target, collapse = " "),
+                                            from[[i]]),
+                          current.index = i,
+                          changes = changes,
+                          full.dictionary = full.dictionary,
+                          category = category,
+                          dictionary = dictionary,
+                          keepStrings = keepStrings,
+                          go.back.count = go.back.count),
+          silent = TRUE
+        )
+        
+        linebreak()
+        
+        ## Check for user stoppage or error
+        if("STOP" %in% result){
+          
+          # Let user know their data is being saved
+          message("\nUser stopped. Saving progress...\n")
+          
+          # Return the results
+          res <- list()
+          
+          # Collect necessary objects
+          res$type <- "free"
+          res$dictionary <- dictionary
+          res$full.dictionary <- full.dictionary
+          res$orig.dictionary <- orig.dictionary
+          res$spelling <- spelling
+          res$category <- category
+          res$from <- from
+          res$to <- to
+          res$initial <- initial
+          res$initial.to <- initial.to
+          res$ind <- ind
+          res$auto.ind <- auto.ind
+          res$changes <- changes
+          res$main.count <- main.count
+          res$go.back.count <- go.back.count
+          res$go.back.reset <- go.back.reset
+          if(exists("multi.count"))
+          {res$multi.count <- multi.count}
+          res$data <- data
+          res$keepStrings <- keepStrings
+          res$stop <- TRUE
+          
+          class(res) <- "textcleaner"
+          
+          # Close progress bar
+          close(pb)
+          
+          Sys.sleep(2)
+          
+          return(res)
+          
+        }else if(any(class(result) == "try-error")){
+          
+          # Give error
+          error.fun(result, "spellcheck.menu", "textcleaner")
+          
+          # Return the results
+          res <- list()
+          
+          # Collect necessary objects
+          res$type <- "free"
+          res$dictionary <- dictionary
+          res$full.dictionary <- full.dictionary
+          res$orig.dictionary <- orig.dictionary
+          res$spelling <- spelling
+          res$category <- category
+          res$from <- from
+          res$to <- to
+          res$initial <- initial
+          res$initial.to <- initial.to
+          res$ind <- ind
+          res$auto.ind <- auto.ind
+          res$changes <- changes
+          res$main.count <- main.count
+          res$go.back.count <- go.back.count
+          res$go.back.reset <- go.back.reset
+          if(exists("multi.count"))
+          {res$multi.count <- multi.count}
+          res$keepStrings <- keepStrings
+          res$data <- data
+          res$stop <- TRUE
+          
+          class(res) <- "textcleaner"
+          
+          # Close progress bar
+          close(pb)
+          
+          # Let user know their data is being saved
+          message("\nSaving progress...\n")
+          
+          Sys.sleep(2)
+          
+          return(res)
+        }
+        
+        ## Update go back count
+        if(result$go.back.count == go.back.count){
+          
+          ## If equal then check if reset is activated
+          if(go.back.reset){ ## If activated, then reset
+            go.back.count <- 1
+          }else{ ## If not activated, then activate
+            go.back.reset <- TRUE
+          }
+          
+        }else{
+          
+          ## Update count and do not reset
+          go.back.count <- result$go.back.count
+          go.back.reset <- FALSE
+          
+        }
+        
+        ## Change with GO BACK option
+        if(result$go.back){
+          
+          ## Check if it is the first response of multiple
+          ## response check
+          if(multi.count == 1)
+          {
+            ## Check if the main response is the first response
+            if(main.count != 1)
+            {
+              ## Revert to current responses to original
+              to[[i]] <- initial.to[[i]]
+              
+              ## Previous response
+              prev.resp <- initial.to[[ind[main.count-go.back.count]]]
+              
+              ## String split
+              prev.resp.split <- unlist(strsplit(prev.resp, split = " "))
+              
+              ## Revert dictionary
+              if(any(!prev.resp.split %in% full.dictionary == prev.resp.split %in% orig.dictionary)){
+                
+                ## Targets to remove from full dictionary
+                target.rms <- which(!prev.resp.split %in% full.dictionary == prev.resp.split %in% orig.dictionary)
+                
+                ## Indices to remove
+                ind.rms <- match(prev.resp.split[target.rms], full.dictionary)
+                
+                ## Update full dictionary
+                full.dictionary <- full.dictionary[-ind.rms]
+              }
+              
+              ## Revert to previous responses to original
+              to[[ind[main.count-go.back.count]]] <- prev.resp
+              
+              ## Revert changes
+              changes <- changes[-which(names(changes) == paste(ind[main.count-go.back.count]))]
+              
+              ## Update multiple response count
+              main.count <- main.count - (go.back.count + 1)
+              
+              ## Reset go back count
+              go.back.count <- 1
+              
+              break
+            }else{
+              
+              ## Let user know they cannot go back any further
+              message("\nThis is the first response. 'GO BACK' is not available.")
+              
+              ## Line break
+              linebreak()
+              
+              # Add artificial pause for smoother feel
+              Sys.sleep(0.5)
+              
+            }
+          }else{
+            
+            ## Revert to previous response state
+            target <- prev.target
+            
+            ## Revert full dictionary
+            if(any(prev.target %in% full.dictionary & !prev.target %in% orig.dictionary))
+            {
+              ## Targets to remove from full dictionary
+              target.rms <- which(prev.target %in% full.dictionary & !prev.target %in% orig.dictionary)
+              
+              ## Indices to remove
+              ind.rms <- match(prev.target[target.rms], full.dictionary)
+              
+              ## Update full dictionary
+              full.dictionary <- full.dictionary[-ind.rms]
+            }
+            
+            ## Revert previous changes
+            changes <- changes[[which(names(changes) == paste(ind[main.count]))]][-(multi.count - 1),]
+            
+            ## Update multiple response count
+            multi.count <- multi.count - 1
+          }
+        }else{
+          
+          ## Save previous target (GO BACK response option)
+          prev.target <- target
+          
+          ## Update changes
+          if(length(result$target) == 1){
+            target[multi.count] <- result$target 
+          }else{
+            target <- result$target
+          }
+          changes <- result$changes
+          full.dictionary <- result$full.dictionary
+          
+          ## Check for BAD STRING
+          if(all(target == "NA")){
+            result$end <- TRUE
+          }
+          
+          ## Increase multiple response count
+          if(result$end){
+            multi.count <- length(check.words) + 1
+          }else{multi.count <- multi.count + 1}
+        }
+        
+      }
+      
+      ## Check for keeping strings
+      if(keepStrings){
+        target <- paste(target, collapse = " ")
+      }
+      
+      ## Update lists
+      to[[i]] <- target
+      
+    }else{
+      
+      # Single response
+      ## Run spell-check menu (with error capturing)
+      result <- try(
+        spellcheck.menu(check = target,
+                        context = NULL,
+                        possible = best.guess(target, full.dictionary = full.dictionary, dictionary),
+                        original = from[[i]],
+                        current.index = i,
+                        changes = changes,
+                        full.dictionary = full.dictionary,
+                        category = category,
+                        dictionary = dictionary,
+                        keepStrings = keepStrings,
+                        go.back.count = go.back.count),
+        silent = TRUE
+        
+      )
+      
+      linebreak()
+      
+      ## Check for user stoppage or error
+      if("STOP" %in% result)
+      {
+        # Let user know their data is being saved
+        message("\nUser stopped. Saving progress...\n")
+        
+        # Return the results
+        res <- list()
+        
+        # Collect necessary objects
+        res$type <- "free"
+        res$dictionary <- dictionary
+        res$full.dictionary <- full.dictionary
+        res$orig.dictionary <- orig.dictionary
+        res$spelling <- spelling
+        res$category <- category
+        res$from <- from
+        res$to <- to
+        res$initial <- initial
+        res$initial.to <- initial.to
+        res$ind <- ind
+        res$auto.ind <- auto.ind
+        res$changes <- changes
+        res$main.count <- main.count
+        res$go.back.count <- go.back.count
+        res$go.back.reset <- go.back.reset
+        if(exists("multi.count"))
+        {res$multi.count <- multi.count}
+        res$keepStrings <- keepStrings
+        res$data <- data
+        res$stop <- TRUE
+        
+        class(res) <- "textcleaner"
+        
+        # Close progress bar
+        close(pb)
+        
+        Sys.sleep(2)
+        
+        return(res)
+        
+      }else if(any(class(result) == "try-error"))
+      {
+        # Give error
+        error.fun(result, "spellcheck.menu", "textcleaner")
+        
+        # Return the results
+        res <- list()
+        
+        # Collect necessary objects
+        res$type <- "free"
+        res$dictionary <- dictionary
+        res$full.dictionary <- full.dictionary
+        res$orig.dictionary <- orig.dictionary
+        res$spelling <- spelling
+        res$category <- category
+        res$from <- from
+        res$to <- to
+        res$initial <- initial
+        res$initial.to <- initial.to
+        res$ind <- ind
+        res$auto.ind <- auto.ind
+        res$changes <- changes
+        res$main.count <- main.count
+        res$go.back.count <- go.back.count
+        res$go.back.reset <- go.back.reset
+        if(exists("multi.count"))
+        {res$multi.count <- multi.count}
+        res$keepStrings <- keepStrings
+        res$data <- data
+        res$stop <- TRUE
+        res$target <- target
+        
+        class(res) <- "textcleaner"
+        
+        # Close progress bar
+        close(pb)
+        
+        # Let user know their data is being saved
+        message("\nSaving progress...\n")
+        
+        Sys.sleep(2)
+        
+        return(res)
+      }
+      
+      ### Update go back count
+      if(result$go.back.count == go.back.count){
+        
+        ## If equal then check if reset is activated
+        if(go.back.reset){ ## If activated, then reset
+          go.back.count <- 1
+        }else{ ## If not activated, then activate
+          go.back.reset <- TRUE
+        }
+        
+      }else{
+        
+        ## Update count and do not reset
+        go.back.count <- result$go.back.count
+        go.back.reset <- FALSE
+        
+      }
+      
+      ## Change with GO BACK option
+      if(result$go.back)
+      {
+        ## Check if the main response is the first response
+        if(main.count != 1)
+        {
+          ## Revert to current responses to original
+          to[[i]] <- initial.to[[i]]
+          
+          ## Previous response
+          prev.resp <- initial.to[[ind[main.count-go.back.count]]]
+          
+          ## String split
+          prev.resp.split <- unlist(strsplit(prev.resp, split = " "))
+          
+          ## Revert dictionary
+          if(any(!prev.resp.split %in% full.dictionary == prev.resp.split %in% orig.dictionary)){
+            
+            ## Targets to remove from full dictionary
+            target.rms <- which(!prev.resp.split %in% full.dictionary == prev.resp.split %in% orig.dictionary)
+            
+            ## Indices to remove
+            ind.rms <- match(prev.resp.split[target.rms], full.dictionary)
+            
+            ## Update full dictionary
+            full.dictionary <- full.dictionary[-ind.rms]
+          }
+          
+          ## Revert to previous responses to original
+          to[[ind[main.count-go.back.count]]] <- prev.resp
+          
+          ## Revert changes
+          changes <- changes[-which(names(changes) == paste(ind[main.count-go.back.count]))]
+          
+          ## Revert dictionary
+          #if(any(!initial.to[[ind[main.count-go.back.count]]] %in% full.dictionary == initial.to[[ind[main.count-go.back.count]]] %in% orig.dictionary))
+          #{
+          #  ## Targets to remove from full dictionary
+          #  target.rms <- which(!initial.to[[ind[main.count-go.back.count]]] %in% full.dictionary == initial.to[[ind[main.count-go.back.count]]] %in% orig.dictionary)
+          #  
+          #  ## Indices to remove
+          #  ind.rms <- match(initial.to[[ind[main.count-go.back.count]]][target.rms], full.dictionary)
+          #  
+          #  ## Update full dictionary
+          #  full.dictionary <- full.dictionary[-ind.rms]
+          #}
+          
+          ## Revert to previous responses to original
+          #to[[ind[main.count-go.back.count]]] <- initial.to[[ind[main.count-go.back.count]]]
+          
+          ## Revert changes
+          #changes <- changes[-which(names(changes) == paste(ind[main.count-go.back.count]))]
+          
+          ## Update multiple response count
+          main.count <- main.count - (go.back.count + 1)
+          
+          ## Reset go back count
+          go.back.count <- 1
+          
+        }else{
+          
+          ## Let user know they cannot go back any further
+          message("This is the first response. 'GO BACK' is not available.")
+          
+          ## Line break
+          linebreak()
+          
+          # Add artificial pause for smoother feel
+          Sys.sleep(0.5)
+          
+        }
+        
+      }else{
+        ## Update lists
+        to[[i]] <- result$target
+        changes <- result$changes
+        full.dictionary <- result$full.dictionary
+      }
+    }
+    
+    # Update progress bar
+    if(Sys.info()["sysname"] == "Windows"){
+      
+      percent <- floor((main.count/length(ind))*100)
+      info <- suppressWarnings(sprintf(paste(main.count, "of", length(ind), "responses done"), percent))
+      tcltk::setTkProgressBar(pb, main.count, sprintf("Spell-check Progress (%s)", info), info)
+      
+    }else{
+      
+      # Add spacing
+      cat("\n")
+      
+      # Increase progress bar
+      setTxtProgressBar(pb, main.count)
+      
+      # Add artificial pause for smoother feel
+      Sys.sleep(0.10)
+      
+      # Add spacing
+      cat("\n")
+    }
+    
+    # Increase main count
+    main.count <- main.count + 1
+    
+  }
+  
+  # Close progress bar
+  if(main.count != 1){
+    close(pb)
+  }
+  
+  # Initialize final results
+  final.res <- list()
+  
+  # Update dictionary
+  if(length(orig.dictionary) != length(full.dictionary)){
+    
+    # Places to save
+    ## Choices
+    choices <- c("In my results",
+                 "In my working directory",
+                 "I'd like to choose the directory",
+                 "Don't save it")
+    
+    ## Title
+    title <- "\nWhere would you like to save your additional dictionary entries?"
+    
+    ## Menu
+    customMenu(choices = choices, title = title, default = 4, dictionary = TRUE)
+    
+    ## User response
+    ans <- readline(prompt = "Selection: ")
+    
+    ## Make sure it's an appropriate response
+    ans <- appropriate.answer(answer = ans, choices = choices, default = 4, dictionary = TRUE)
+    
+    ## Branch based on answer
+    if(ans == 1) # In my results
+    {
+      ## Save to results
+      final.res$dictionary <- full.dictionary
+      
+      ## Let user know
+      message("\nDictionary saved to your output object under '$dictionary'")
+      
+    }else if(ans == 2) # In my working directory
+    {
+      ## Obtain name
+      dictionary.name <- readline(prompt = "Name for the dictionary: ")
+      
+      ## Check if user supplied *.dictionary
+      dictionary.name <- gsub(".dictionary", "", dictionary.name)
+      
+      ## Save dictionary
+      SemNetDictionaries::append.dictionary(full.dictionary, dictionary.name = dictionary.name,
+                                            save.location = "wd", textcleaner = TRUE)
+      
+      ## Let user know
+      message(paste("\nDictionary saved to your working directory: '", getwd(), "'", sep = ""))
+      
+    }else if(ans == 3) # I'd like to choose the directory
+    {
+      # Obtain name
+      dictionary.name <- readline(prompt = "Name for the dictionary: ")
+      
+      # Check if user supplied *.dictionary
+      dictionary.name <- gsub(".dictionary", "", dictionary.name)
+      
+      # Save dictionary
+      SemNetDictionaries::append.dictionary(full.dictionary, dictionary.name = dictionary.name,
+                                            save.location = "choose", textcleaner = TRUE)
+      
+    }else{message("\nDictionary was not saved")}
+  }
+  
+  # Run ad hoc check (if necessary)
+  if(main.count != 1){
+    
+    ## Ad hoc check for monikers
+    if(any(dictionary %in% SemNetDictionaries::dictionaries(TRUE)[-which(SemNetDictionaries::dictionaries(TRUE) == "general")])){
+      
+      ### Let user know
+      message("\nRunning ad hoc check for common misspellings and monikers...", appendLF = FALSE)
+      
+      ### Target dictionaries
+      target <- dictionary[na.omit(match(SemNetDictionaries::dictionaries(TRUE), dictionary))]
+      
+      ### Obtain monikers
+      target.moniker <- SemNetDictionaries::load.monikers(target)
+      
+      ### Check for monikers
+      # Message for large number of responses remaining
+      message("\nUsing parallel processing to speed up moniker check...")
+      
+      # Number of cores
+      ncores <- parallel::detectCores() / 2
+      
+      # Set up clusters
+      cl <- parallel::makeCluster(ncores)
+      
+      # Functions
+      funcs <- c(
+        "moniker"
+      )
+
+      # Export functions
+      parallel::clusterExport(
+        cl = cl, funcs,
+        envir = as.environment(asNamespace("SemNetCleaner"))
+      )
+      
+      # Spell-check each individual word within the list (including multiple word responses)
+      replace_to <- pbapply::pblapply(
+        seq_along(to),
+        function(i, to, target.moniker, spelling){
+          unlist(lapply(to[[i]], function(x){
+            
+            if(!is.na(x)){
+              
+              unlist(moniker(
+                x,
+                target.moniker,
+                spelling = spelling
+              ))
+              
+            }
+            
+          }))
+        },
+        to = to, target.moniker = target.moniker, spelling = spelling,
+        cl = cl
+      )
+      
+      parallel::stopCluster(cl)
+      
+      # Replace to list
+      to <- replace_to
+  
+    }
+    
+  }
+  
+  # Separate automated indices
+  auto.ind <- na.omit(
+    unlist(
+      lapply(auto.ind, function(i){
+        
+        # Responses
+        from_response <- from[[i]]
+        to_response <- to[[i]]
+        
+        # Check for match
+        if(all(!is.na(match(from_response, to_response)))){
+          return(NA)
+        }else{
+          return(i)
+        }
+        
+      })
+    )
+  )
+  
+  # Separate moniker changes
+  if(main.count != 1){
+    if(any(dictionary %in% SemNetDictionaries::dictionaries(TRUE)[-which(SemNetDictionaries::dictionaries(TRUE) == "general")])){
+      
+      auto.ind <- auto.ind[!from[auto.ind] %in% target.moniker]
+      
+    }
+  }
+  
+  # Collect results
+  # (initialized before asking to save dictionary)
+  final.res$from <- from
+  final.res$to <- to
+  final.res$manual <- ind
+  final.res$auto <- auto.ind
+  final.res$data <- data
+  final.res$type <- "free"
   final.res$stop <- FALSE
   
   class(final.res) <- "textcleaner"
@@ -4011,6 +6516,391 @@ spellcheck.dictionary <- function (uniq.resp = NULL, dictionary = NULL, spelling
 #%%%%%%%%%%%%%%%%%%%%%%%#
 #### CORRECT CHANGES ####
 #%%%%%%%%%%%%%%%%%%%%%%%#
+
+#' Correct Changes from \code{\link[SemNetCleaner]{textcleaner}}
+#' 
+#' @description A function that corrects changes that were made
+#' automatically by \code{\link[SemNetCleaner]{textcleaner}}
+#' 
+#' @param textcleaner.obj Object from \code{\link[SemNetCleaner]{textcleaner}}
+#' 
+#' @param type Character vector.
+#' Type of task to be preprocessed.
+#' \itemize{
+#' 
+#' \item{\code{"fluency"}}
+#' {Verbal fluency data (e.g., categories, phonological, synonyms)}
+#' 
+#' \item{\code{"free"}}
+#' {Free association data (e.g., cue terms or words)}
+#' 
+#' }
+#' 
+#' @return This function returns the corrected lists from \code{\link[SemNetCleaner]{textcleaner}}s:
+#' 
+#' \item{binary}{A matrix of responses where each row represents a participant
+#' and each column represents a unique response. A response that a participant has provided is a '\code{1}'
+#' and a response that a participant has not provided is a '\code{0}'}
+#'
+#' \item{responses}{A list containing two objects:
+#' 
+#' \itemize{
+#' 
+#' \item{clean}
+#' {A response matrix that has been spell-checked and de-pluralized with duplicates removed.
+#' This can be used as a final dataset for analyses (e.g., fluency of responses)}
+#' 
+#' \item{original}
+#' {The original response matrix that has had white spaces before and
+#' after words response. Also converts all upper-case letters to lower case}
+#' 
+#' }
+#' 
+#' }
+#'
+#' \item{spellcheck}{A list containing three objects:
+#' 
+#' \itemize{
+#' 
+#' \item{\code{full}}
+#' {All responses regardless of spell-checking changes}
+#' 
+#' \item{\code{auto}}
+#' {Only the incorrect responses that were changed during spell-check}
+#' 
+#' \item{\code{changes}}
+#' {Only the changes made within the function \code{\link[SemNetCleaner]{correct.changes}}}
+#' 
+#' }
+#' 
+#' }
+#' 
+#' \item{removed}{A list containing two objects: 
+#' 
+#' \itemize{
+#' 
+#' \item{\code{rows}}
+#' {Identifies removed participants by their row (or column) location in the original data file}
+#' 
+#' \item{\code{ids}}
+#' {Identifies removed participants by their ID (see argument \code{data})}
+#' 
+#' }
+#' 
+#' }
+#' 
+#' \item{partChanges}{A list where each participant is a list index with each
+#' response that was been changed. Participants are identified by their ID (see argument \code{data}).
+#' This can be used to replicate the cleaning process and to keep track of changes more generally.
+#' Participants with \code{NA} did not have any changes from their original data
+#' and participants with missing data are removed (see \code{removed$ids})}
+#' 
+#' @examples
+#' # Toy example
+#' raw <- open.animals[c(1:10),-c(1:3)]
+#' 
+#' if(interactive())
+#' {
+#'     #Full test
+#'     clean <- textcleaner(open.animals[,-c(1,2)], partBY = "row", dictionary = "animals")
+#' }
+#' 
+#' @author Alexander Christensen <alexpaulchristensen@gmail.com>
+#' 
+#' @importFrom utils edit write.csv
+#' 
+#' @noRd
+#' 
+# Correct changes
+# Updated 23.11.2021
+# Major update: 19.04.2020
+correct.changes <- function(textcleaner.obj, type = c("fluency", "free"))
+{
+  
+  # Check if textcleaner object is input
+  # if(!class(textcleaner.obj) == "textcleaner")
+  # {stop("A 'textcleaner' class object was not input in the 'textcleaner.obj' argument")}
+  
+  # Store textcleaner object as result list
+  res <- textcleaner.obj
+  
+  ## Original automated responses
+  automated <- res$spellcheck$automated
+  
+  # Make sure automated responses are a matrix
+  if(is.vector(automated)){
+    automated <- t(as.matrix(automated))
+  }
+  
+  # Get number of columns to add
+  from_vector <- automated[,"from"]
+  
+  # Split string
+  from_split <- strsplit(from_vector, split = " ")
+  
+  # Max lengths
+  max_length <- max(unlist(lapply(from_split, length)), na.rm = TRUE)
+  
+  # Add columns for smoother Shiny experience
+  for(i in 1:max_length){
+    
+    # Make all NA
+    automated <- cbind(automated, NA)
+    
+    # Rename columns
+    colnames(automated)[-1] <- paste("to", 1:(ncol(automated) - 1), sep = "_")
+    
+    # Ensure matrix
+    automated <- as.matrix(automated)
+  }
+  
+  # Write temporary file
+  DIR <- tempdir()
+  PATH <- paste(DIR, "automated.csv", sep = "\\")
+  write.csv(automated, file = PATH, row.names = FALSE)
+  
+  # Get changes
+  ## Check operating system
+  OS <- system.check()$OS
+  
+  if(OS == "linux"){
+    
+    # Set up message to user
+    cat(colortext("\nYou will now have a chance to correct the changes that", defaults = "message"))
+    cat(colortext("\nwere made during the automated spell-checking process.", defaults = "message"))
+    cat(colortext("\nA spreadsheet will open allowing you to manually correct", defaults = "message"))
+    cat(colortext("\nthese changes.\n\n", defaults = "message"))
+    
+    readline("Press ENTER to continue...")
+    
+    cat(colortext("\nThe first column of the spreadsheet corresponds to the", defaults = "message"))
+    cat(colortext("\nrow number provided in the output object `$spellcheck$correspondence`", defaults = "message"))
+    cat(colortext("\n(see ?textcleaner for more information about this output).", defaults = "message"))
+    
+    cat(colortext("\n\nThe second column is the original response the participant provided", defaults = "message"))
+    cat(colortext(paste("\nand columns 3 through", 3 + (ncol(textcleaner.obj$spellcheck$automated) - 2),
+                        "are the automated spell-check responses."), defaults = "message"))
+    cat(colortext('\nThese columns will have names formatted with "to_#".\n\n', defaults = "message"))
+    
+    readline("Press ENTER to continue...")
+    
+    cat(colortext(paste("\nYou should change columns 3 through", 3 + (ncol(textcleaner.obj$spellcheck$automated) - 2),
+                        "by manually typing responses."), defaults = "message"))
+    cat(colortext('\nFor inappropriate responses, "NA" should be typed. When finished,', defaults = "message"))
+    cat(colortext('\nyou can exit this process by clicking the "X" in the top right', defaults = "message"))
+    cat(colortext('\ncorner of the spreadsheet.\n\n', defaults = "message"))
+    
+    readline("Press ENTER to continue with spell-check.")
+    
+    changes <- edit(automated)
+    
+  }else{
+    
+    # Set up message to user
+    cat(colortext("\nYou will now have a chance to correct the changes that", defaults = "message"))
+    cat(colortext("\nwere made during the AUTOMATED spell-checking process.", defaults = "message"))
+    cat(colortext("\nA spreadsheet will open allowing you to manually correct", defaults = "message"))
+    cat(colortext("\nthese changes.\n\n", defaults = "message"))
+    
+    readline("Press ENTER to continue with spell-check.")
+    
+    changes <- AutomatedEdit() # Make changes
+    automated <- as.matrix(automated) # Convert back to matrix
+    changes <- as.matrix(changes) # Convert changes to matrix
+    changes <- ifelse(changes == "", NA, changes) # Replace blanks with NA
+  }
+  
+  # Let the user know that their data is being prepared
+  message("\nPreparing your data...")
+  
+  # Start "add column" configuration (not functional)
+  
+  # # Get differences
+  # ## Difference in columns
+  # colDiff <- ncol(changes) - ncol(automated)
+  # if(colDiff != 0){
+  #   
+  #   # Loop through adding NA columns
+  #   for(i in 1:colDiff){
+  #     automated <- cbind(automated, NA)
+  #   }
+  #   
+  #   # Rename columns
+  #   colnames(automated)[-1] <- paste("to", 1:(ncol(automated) - 1), sep = "_")
+  #   
+  #   # Ensure matrix
+  #   automated <- as.matrix(automated)
+  #   
+  # }
+  
+  # End "add column" configuration
+  
+  ## Obtain differences
+  differences <- automated != as.matrix(changes) # ensure matrix for changes
+  
+  ## Ensure matrix
+  if(!is.matrix(differences)){
+    differences <- t(as.matrix(differences))
+  }
+  
+  # Provide changes for user
+  ## Find rows that have changed
+  target.changes <- which(apply(differences, 1, function(x){any(x)}))
+  
+  # If there are no changes, then return original object
+  if(length(target.changes) == 0){
+    
+    message("\nNo responses changed.")
+    
+    return(textcleaner.obj)
+    
+  }else{
+    
+    ## Initialize track changes
+    track.changes <- list()
+    
+    ## Loop through changes
+    for(i in 1:length(target.changes)){
+      
+      ## Set up change matrix
+      chn.mat <- rbind(automated[target.changes[i],], changes[target.changes[i],])
+      colnames(chn.mat)[-1] <- rep("to", ncol(chn.mat)-1)
+      row.names(chn.mat) <- c("Previous", "Corrected")
+      if(any(apply(chn.mat, 2, function(x){all(is.na(x))}))){
+        chn.mat <- chn.mat[,-which(apply(chn.mat, 2, function(x){all(is.na(x))}))]
+      }
+      
+      track.changes[[automated[target.changes[i],1]]] <- chn.mat
+    }
+    
+    res$spellcheck$verified <- track.changes
+    
+    ## Original is used (rather than corrected) to run through same preprocessing
+    ## as in textcleaner (far more efficient than actually changing through each
+    ## object in the results list)
+    if(type == "free"){
+      original <- as.matrix(res$data$original)
+    }else{
+      original <- as.matrix(res$responses$original)
+    }
+    
+    # Create new correspondence matrix
+    correspondence <- res$spellcheck$correspondence
+    
+    # Get number of columns between correspondence and changes matrices to match
+    if(ncol(correspondence) > ncol(changes)){
+      
+      ## Difference in number of columns
+      diff <- ncol(correspondence) - ncol(changes)
+      
+      ## Tack on NA columns
+      for(i in 1:diff)
+      {changes <- as.matrix(cbind(changes, rep(NA, nrow(changes))))}
+      
+    }else if(ncol(correspondence) < ncol(changes)){
+      
+      ## Difference in number of columns
+      diff <- ncol(changes) - ncol(correspondence)
+      
+      ## Tack on NA columns
+      for(i in 1:diff)
+      {correspondence <- as.matrix(cbind(correspondence, rep(NA, nrow(correspondence))))}
+    }
+    
+    # Update correspondence matrix
+    correspondence[row.names(res$spellcheck$automated),] <- changes
+    res$spellcheck$correspondence <- correspondence
+    
+    # Remove NA columns
+    na.cols <- apply(correspondence, 2, function(x){
+      all(is.na(x))
+    })
+    correspondence <- correspondence[,!na.cols]
+    
+    # Create 'from' list
+    from <- as.list(correspondence[,"from"])
+    
+    # Create 'to' list
+    if(any(is.na(correspondence[,grep("to", colnames(correspondence))]))){
+      to <- apply(as.matrix(correspondence[,grep("to", colnames(correspondence))]), 1, function(x){unname(na.omit(x))})
+    }else{to <- as.matrix(correspondence[,grep("to", colnames(correspondence))])}
+    
+    # Create correspondence matrix (error catch)
+    corr.mat <- try(
+      correspondence.matrix(from, to),
+      silent = TRUE
+    )
+    
+    if(any(class(corr.mat) == "try-error")){
+      return(error.fun(corr.mat, "correspondence.matrix", "correct.changes"))
+    }
+    
+    ## Update with changes made by user
+    res$spellcheck$automated <- changes
+    
+    # # Get spell-corrected data (error catch)
+    # if(type == "fluency"){
+    #   
+    #   # Fluency data correction
+    #   corrected <- try(
+    #     correct.data(original, corr.mat),
+    #     silent = TRUE
+    #   )
+    #   
+    #   if(any(class(corrected) == "try-error"))
+    #   {return(error.fun(corrected, "correct.data", "correct.changes"))}
+    #   
+    #   ## Collect behavioral data
+    #   behavioral <- corrected$behavioral
+    #   
+    #   ## Make sure to replace faux "NA" with real NA
+    #   corrected$corrected[which(corrected$corrected == "NA")] <- NA
+    #   
+    #   ## Cleaned responses (no instrusions or perseverations)
+    #   cleaned.list <- apply(corrected$corrected, 1, function(x){unique(na.omit(x))})
+    #   
+    #   ## Check if cleaned.list is a list
+    #   if(!is.list(cleaned.list)){
+    #     cleaned.list <- apply(cleaned.list, 1, as.list)
+    #   }
+    #   
+    #   max.resp <- max(unlist(lapply(cleaned.list, length)))
+    #   
+    #   cleaned.matrix <- t(sapply(
+    #     lapply(cleaned.list, function(x, max.resp){
+    #       c(x, rep(NA, max.resp - length(x)))
+    #     }, max.resp = max.resp)
+    #     ,rbind))
+    #   
+    #   colnames(cleaned.matrix) <- paste("Response_", formatC(1:ncol(cleaned.matrix),
+    #                                                          digits = nchar(ncol(cleaned.matrix)) - 1,
+    #                                                          flag = "0"), sep = "")
+    #   
+    #   res$responses$clean <- cleaned.matrix
+    #   
+    #   # Convert to binary response matrix (error catch)
+    #   res$responses$binary <- try(
+    #     resp2bin(corrected$corrected),
+    #     silent = TRUE
+    #   )
+    #   
+    #   if(any(class(res$responses$binary) == "try-error"))
+    #   {return(error.fun(res$responses$binary, "resp2bin", "correct.changes"))}
+    #   
+    #   behavioral <- cbind(behavioral, rowSums(res$responses$binary))
+    #   colnames(behavioral)[3] <- "Appropriate"
+    #   res$behavioral <- as.data.frame(behavioral)
+    #   
+    #   #make 'textcleaner' class
+    #   class(res) <- "textcleaner"
+    #   
+    # }
+    
+    return(res)
+    
+  }
+  
+}
 
 #' Correspondence Matrix
 #' 
@@ -4135,6 +7025,220 @@ correct.data <- function (data, corr.mat)
   colnames(correct.mat) <- paste("Response_", formatC(1:ncol(correct.mat),
                                                       digits = nchar(ncol(correct.mat)) - 1,
                                                       flag = "0"), sep = "")
+  
+  # Initialize result list
+  res <- list()
+  
+  # Collect results
+  res$behavioral <- behav.mat
+  res$corrected <- correct.mat
+  
+  return(res)
+}
+
+#' @author Alexander Christensen <alexpaulchristensen@gmail.com>
+#' 
+#' @noRd
+# Spell Corrected Matrix
+# Updated 10.04.2022
+correct.data.free <- function (data, corr.mat, ids)
+{
+  # Correct matrix
+  correct.mat <- data
+  
+  # Initialize perseverations and intrusions matrix
+  behav.mat <- matrix(0, nrow = length(ids), ncol = 2)
+  colnames(behav.mat) <- c("Perseverations", "Intrusions")
+  row.names(behav.mat) <- ids
+  
+  # Loop through each participant
+  for(i in 1:length(ids)){
+    
+    # Get target participant
+    ind.p <- which(correct.mat[,"ID"] == ids[i])
+    target.p <- correct.mat[ind.p,]
+    
+    # Loop through each cue
+    cues <- unique(target.p[,"Cue"])
+    
+    for(j in 1:length(cues)){
+      
+      # Get target cue
+      ind.c <- which(target.p[,"Cue"] == cues[j])
+      target.c <- target.p[ind.c,]
+      
+      # Ensure matrix
+      if(!is.data.frame(target.c) & !is.matrix(target.c)){
+        target.c <- t(as.matrix(target.c))
+      }
+      
+      # Identify sequences (more than one time point or condition)
+      target_seq <- seq_min_max(as.numeric(row.names(target.c)))
+      
+      # Loop through sequences
+      for(s in 1:length(target_seq$min)){
+        
+        # Obtain starting and ending points of current sequence
+        if(length(target_seq$min) == 1){
+          start <- 1
+          end <- nrow(target.c)
+        }else{
+          start <- target_seq$starts[s]
+          end <- target_seq$breaks[s]
+        }
+        
+        # Match responses to correspondence matrix
+        ind <- match(
+          target.c[start:end,"Response"],
+          corr.mat[,"from"]
+        )
+        
+        # Obtain correspondence
+        corr <- corr.mat[ind,-1]
+        
+        # Ensure it's a matrix
+        if(!is.matrix(corr)){
+          corr <- matrix(corr, ncol = length(corr))
+        }
+        
+        # # Remove NA columns
+        na.cols <- apply(corr, 2, function(x){all(is.na(x))})
+        
+        if(any(na.cols)){
+          
+          # Remove NA columns
+          corr <- corr[,!na.cols]
+          
+          # Check for matrix
+          if(!is.matrix(corr)){
+            corr <- matrix(corr, nrow = length(corr))
+          }
+          
+        }
+        
+        # Check for matching lengths
+        if(length(ind) == nrow(corr) & ncol(corr) == 1){
+          
+          # Convert responses in their correct order back into data
+          correct.ord <- as.vector(corr)
+          
+          if(length(correct.ord) > 0){
+            
+            # Compute number of intrusions
+            behav.mat[i,"Intrusions"] <- behav.mat[i,"Intrusions"] + sum(is.na(correct.ord))
+            
+            # Compute number of perseverations
+            behav.mat[i,"Perseverations"] <- behav.mat[i,"Perseverations"] + sum(duplicated(correct.ord))
+            
+            # Get duplicates
+            if(any(duplicated(correct.ord))){
+              correct.ord[duplicated(correct.ord)] <- NA
+            }
+            
+            # Target responses
+            target_resps <- ind.p[ind.c][start:end]
+            
+            # Insert into corrected matrix
+            correct.mat[target_resps,"Response"] <- correct.ord
+            
+          }else{
+            
+            # Compute number of intrusions
+            behav.mat[i,"Intrusions"] <- behav.mat[i,"Intrusions"] + 0
+            
+            # Compute number of perseverations
+            behav.mat[i,"Perseverations"] <- behav.mat[i,"Perseverations"] + 0
+            
+          }
+          
+        }else{
+          
+          # Create correct order
+          correct.ord <- as.vector(t(corr[,1]))
+          
+          # Compute number of intrusions
+          behav.mat[i,"Intrusions"] <- behav.mat[i,"Intrusions"] + sum(is.na(correct.ord))
+          
+          # Compute number of perseverations
+          behav.mat[i,"Perseverations"] <- behav.mat[i,"Perseverations"] + sum(duplicated(correct.ord))
+          
+          # Reorganize for rows to add
+          add_responses <- unname(unlist(apply(corr, 1, function(x){na.omit(x)})))
+          
+          # Get duplicates
+          if(any(duplicated(add_responses))){
+            add_responses[duplicated(add_responses)] <- NA
+          }
+          
+          # Target responses
+          target_resps <- ind.p[ind.c][start:end]
+          
+          # Set position
+          minPosition <- min(target_resps)
+          maxPosition <- minPosition + length(add_responses) - 1
+          position <- seq(minPosition, maxPosition, 1)
+          
+          # Cut data
+          data_top <- correct.mat[1:(minPosition - 1),]
+          data_bottom <- correct.mat[(max(target_resps) + 1):nrow(correct.mat),]
+          
+          # Make middle
+          data_middle <- data.frame(
+            ID = rep(ids[i], length(add_responses)),
+            Cue = rep(cues[j], length(add_responses)),
+            Response = add_responses
+          )
+          
+          # Bind data
+          correct.mat <- rbind(
+            data_top,
+            data_middle,
+            data_bottom
+          )
+          
+          # Rename row names
+          ## Necessary for seq_min_max function
+          row.names(correct.mat) <- 1:nrow(correct.mat)
+          
+          # Update values
+          ## Get target participant
+          ind.p <- which(correct.mat[,"ID"] == ids[i])
+          target.p <- correct.mat[ind.p,]
+          
+          ## Get target cue
+          ind.c <- which(target.p[,"Cue"] == cues[j])
+          target.c <- target.p[ind.c,]
+          
+          ## Ensure matrix
+          if(!is.data.frame(target.c) & !is.matrix(target.c)){
+            target.c <- t(as.matrix(target.c))
+          }
+          
+          ## Identify sequences (more than one time point or condition)
+          target_seq <- seq_min_max(as.numeric(row.names(target.c)))
+          
+        }
+        
+        
+      }
+      
+    }
+    
+  }
+  
+  # Check for "NA" responses
+  if(any(correct.mat[,"Response"] == "NA", na.rm = TRUE)){
+    
+    correct.mat[,"Response"] <- ifelse(
+      correct.mat[,"Response"] == "NA",
+      NA,
+      correct.mat[,"Response"]
+    )
+    
+  }
+  
+  # Remove rows that are all NA
+  correct.mat <- na.omit(correct.mat)
   
   # Initialize result list
   res <- list()

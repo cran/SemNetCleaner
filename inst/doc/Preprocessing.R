@@ -2,9 +2,9 @@
 knitr::opts_chunk$set(echo = TRUE)
 
 ## ----Begin textcleaner, echo = TRUE, eval = FALSE, comment = NA, warning = FALSE----
-#  # Run 'textcleaner'
-#  clean <- textcleaner(data = open.animals[,-c(1:2)], miss = 99,
-#                       partBY = "row", dictionary = "animals")
+# # Run 'textcleaner'
+# clean <- textcleaner(data = open.animals[,-c(1:2)], miss = 99,
+#                      partBY = "row", dictionary = "animals")
 
 ## ----tab2, echo = FALSE, eval = TRUE, comment = NA, warning = FALSE-----------
 output <- matrix(c("`data`", "A matrix or data frame object that contains the participants' IDs and semantic data",
@@ -72,17 +72,17 @@ htmlTable::htmlTable(output,
           caption = "Table 5. `textcleaner` and `correct.changes` Output Objects")
 
 ## ----View unique changes, echo = TRUE, eval = FALSE, comment = NA, warning = FALSE----
-#  # View unique spelling changes
-#  View(clean$spellcheck$auto)
+# # View unique spelling changes
+# View(clean$spellcheck$auto)
 
 ## ----correct changes example, echo = TRUE, eval = FALSE, comment = NA, warning = FALSE----
-#  # Corrected 'clean' object from 'textcleaner'
-#  corr.clean <- correct.changes(textcleaner.obj = clean,
-#                                dictionary = "animals",
-#                                incorrect = c("house", "beasts", "god",
-#                                              "gunny pig", "liam", "loin",
-#                                              "farrot", "oh my", "lizers",
-#                                              "teranchilla","manster", "lamp"))
+# # Corrected 'clean' object from 'textcleaner'
+# corr.clean <- correct.changes(textcleaner.obj = clean,
+#                               dictionary = "animals",
+#                               incorrect = c("house", "beasts", "god",
+#                                             "gunny pig", "liam", "loin",
+#                                             "farrot", "oh my", "lizers",
+#                                             "teranchilla","manster", "lamp"))
 
 ## ----tab6, echo = FALSE, eval = TRUE, comment = NA, warning = FALSE-----------
 output <- matrix(c("`house`", "`mouse`", "`3:BAD RESPONSE`", "---",
@@ -105,15 +105,15 @@ htmlTable::htmlTable(output,
           caption = "Table 6. Responses for `correct.changes`")
 
 ## ----Export spell-check changes, echo = TRUE, eval = FALSE, comment = NA, warning = FALSE----
-#  # Save .csv of unique changes
-#  write.csv(corr.clean$spellcheck$auto,
-#            "unique_changes.csv", row.names = FALSE)
+# # Save .csv of unique changes
+# write.csv(corr.clean$spellcheck$auto,
+#           "unique_changes.csv", row.names = FALSE)
 
 ## ----Export clean responses, echo = TRUE, eval = FALSE, comment = NA, warning = FALSE----
-#  # Save .csv of clean responses
-#  write.csv(corr.clean$responses$clean.resp, "cleaned_verbal_fluency.csv")
+# # Save .csv of clean responses
+# write.csv(corr.clean$responses$clean.resp, "cleaned_verbal_fluency.csv")
 
 ## ----Response totals, echo = TRUE, eval = FALSE, comment = NA, warning = FALSE----
-#  # Verbal fluency response totals
-#  totals <- rowSums(corr.clean$binary)
+# # Verbal fluency response totals
+# totals <- rowSums(corr.clean$binary)
 
