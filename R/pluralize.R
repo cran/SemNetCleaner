@@ -1,4 +1,5 @@
 #' Converts Words to their Plural Form
+#'
 #' @description A function to change words to their plural form.
 #' The rules for converting words to their plural forms
 #' are based on the grammar rules.
@@ -9,7 +10,7 @@
 #'
 #' @param word A word
 #'
-#' @return Returns the word in singular form, unless a plural form
+#' @return Returns the word in plural form, unless a plural form
 #' could not be found (then the original word is returned)
 #'
 #' @examples
@@ -52,137 +53,216 @@
 #' @author Alexander Christensen <alexpaulchristensen@gmail.com>
 #'
 #' @export
-#Pluralarize
-# Updated 12.16.2021
-pluralize <- function (word)
+# Pluralize ----
+# Converts a word to its plural: irregular words come from the shared
+# `irregular_plurals` table, the rest from suffix rules; the result must be a
+# recognized word, otherwise the original word is returned
+# Updated 14.10.2026
+pluralize <- function(
+    word # word to pluralize
+)
 {
-    #original word
-    orig.word <- word
 
-    #general dictionary to check against
-    checker <- SemNetDictionaries::coca.dictionary
+  # Check for errors
+  pluralize_errors(word)
 
-    #changed
-    chn <- FALSE
+  # Original word
+  orig_word <- word
 
-    #irregular cases
-    word <- switch(word,
-                   child = "children",
-                   goose = "geese",
-                   man = "men",
-                   woman = "women",
-                   tooth = "teeth",
-                   foot = "feet",
-                   mouse = "mice",
-                   person = "people",
-                   louse = "lice")
+  # Irregular cases
+  matched <- unname(irregular_plurals[word])
 
-    if(is.null(word))
-    {word <- orig.word
-    }else{chn <- TRUE}
+  # Check for match
+  chn <- !is.na(matched)
 
-    #identify last two letters
-    last.lets <- substr(word,nchar(word)-1,nchar(word))
+  # Check for irregular match
+  if(chn){
 
-    if(!chn)
-    {
-        if(any(c("ss","sh","ch")==last.lets))
-        {word <- paste(word,"es",sep="",collapse="")
-        }else if(any(c("fe")==last.lets))
-        {
-            #remove 'fe'
-            word <- substr(word,1,nchar(word)-2)
-            #add 'ves'
-            word <- paste(word,"ves",sep="",collapse="")
-        }else if(any(c("us")==last.lets))
-        {
-            #remove 'us'
-            word <- substr(word,1,nchar(word)-2)
-            #add 'i'
-            word <- paste(word,"i",sep="",collapse="")
-        }else if(any(c("is")==last.lets))
-        {
-            #remove 'is'
-            word <- substr(word,1,nchar(word)-2)
-            #add 'es'
-            word <- paste(word,"es",sep="",collapse="")
-        }else if(any(c("on")==last.lets))
-        {
-            #remove 'on'
-            word <- substr(word,1,nchar(word)-2)
-            #add 'a'
-            word <- paste(word,"a",sep="",collapse="")
-        }else{
-            #identify last letter
-            last.let <- substr(word,nchar(word),nchar(word))
+    # Trust the curated irregular table; its entries may not be in a general-purpose dictionary
+    return(matched)
 
-            #change to plural based on last letter
-            if(any(c("s","x","z")==last.let))
-            {
-                word <- paste(word,"es",sep="",collapse="")
+  }
 
-                if("s" == last.let)
-                {
-                    if(!word %in% checker)
-                    {
-                        #check for 'ses' ending
-                        word <- paste(orig.word,"ses",sep="",collapse="")
-                    }
-                }else if("z" == last.let)
-                {
-                    if(!word %in% checker)
-                    {
-                        #check for 'zes' ending
-                        word <- paste(orig.word,"zes",sep="",collapse="")
-                    }
-                }
+  # Identify last two letters
+  last_letters <- substr(word, nchar(word) - 1, nchar(word))
 
-            }else if(any(c("f")==last.let))
-            {
-                #remove 'f'
-                word <- substr(word,1,nchar(word)-1)
-                #add 'ves'
-                word <- paste(word,"ves",sep="",collapse="")
+  # chn is always FALSE past the early return above -- no longer wrapped
+  # in `if(!chn)`, which was otherwise always TRUE here
+  if(any(c("ss", "sh", "ch") == last_letters)){
 
-                if(!word %in% checker)
-                {
-                    #check for 's' ending
-                    word <- paste(orig.word,"s",sep="",collapse="")
-                }
+    word <- paste(word, "es", sep = "", collapse = "") # Ends in ss, sh, or ch
 
-            }else if(any(c("y")==last.let))
-            {
-                if(any(c("a","e","i","o","u")==substr(word,nchar(word)-1,nchar(word)-1)))
-                {word <- paste(word,"s",sep="",collapse="")
-                }else{
-                    #remove 'y'
-                    word <- substr(word,1,nchar(word)-1)
-                    #add 'ies'
-                    word <- paste(word,"ies",sep="",collapse="")
-                }
-            }else if(any(c("o")==last.let))
-            {
-                word <- paste(word,"es",sep="",collapse="")
+  }else if(any(c("fe") == last_letters)){ # Ends in 'fe'
 
-                if(!word %in% checker)
-                {
-                    #check for 's' ending
-                    word <- paste(orig.word,"s",sep="",collapse="")
-                }
+    # Remove 'fe'
+    word <- substr(word, 1, nchar(word) - 2)
 
-            }else{word <- paste(orig.word,"s",sep="",collapse="")}
+    # Add 'ves'
+    word <- paste(word, "ves", sep = "", collapse = "")
+
+  }else if(any(c("us") == last_letters)){ # Ends in 'us'
+
+    # Remove 'us'
+    word <- substr(word, 1, nchar(word) - 2)
+
+    # Add 'i'
+    word <- paste(word, "i", sep = "", collapse = "")
+
+  }else if(any(c("is") == last_letters)){ # Ends in 'is'
+
+    # Remove 'is'
+    word <- substr(word, 1, nchar(word) - 2)
+
+    # Add 'es'
+    word <- paste(word, "es", sep = "", collapse = "")
+
+  }else if(any(c("on") == last_letters)){ # Ends in 'on'
+
+    # Remove 'on'
+    word <- substr(word, 1, nchar(word) - 2)
+
+    # Add 'a'
+    word <- paste(word, "a", sep = "", collapse = "")
+
+  }else{ # Other endings
+
+    # Identify last letter
+    last_letter <- substr(word, nchar(word), nchar(word))
+
+    # Change to plural based on last letter
+    if(any(c("s", "x", "z") == last_letter)){
+
+      # Add 'es'
+      word <- paste(word, "es", sep = "", collapse = "")
+
+      # Check for 's' ending
+      if("s" == last_letter){
+
+        # Check whether result is a word
+        if(!coca_dictionary_contains(word)){
+
+          # Check for 'ses' ending
+          word <- paste(orig_word, "ses", sep = "", collapse = "")
+
         }
+
+      }else if("z" == last_letter){ # Ends in 'z'
+
+        # Check whether result is a word
+        if(!coca_dictionary_contains(word)){
+
+          # Check for 'zes' ending
+          word <- paste(orig_word, "zes", sep = "", collapse = "")
+
+        }
+
+      }
+
+    }else if(any(c("f") == last_letter)){ # Ends in 'f'
+
+      # Remove 'f'
+      word <- substr(word, 1, nchar(word) - 1)
+
+      # Add 'ves'
+      word <- paste(word, "ves", sep = "", collapse = "")
+
+      # Check whether result is a word
+      if(!coca_dictionary_contains(word)){
+
+        # Check for 's' ending
+        word <- paste(orig_word, "s", sep = "", collapse = "")
+
+      }
+
+    }else if(any(c("y") == last_letter)){ # Ends in 'y'
+
+      # Check for vowel before 'y'
+      if(any(c("a", "e", "i", "o", "u") == substr(word, nchar(word) - 1, nchar(word) - 1))){
+
+        word <- paste(word, "s", sep = "", collapse = "") # Add s
+
+      }else{ # Consonant before 'y'
+
+        # Remove 'y'
+        word <- substr(word, 1, nchar(word) - 1)
+
+        # Add 'ies'
+        word <- paste(word, "ies", sep = "", collapse = "")
+
+      }
+
+    }else if(any(c("o") == last_letter)){ # Ends in 'o'
+
+      # Add 'es'
+      word <- paste(word, "es", sep = "", collapse = "")
+
+      # Check whether result is a word
+      if(!coca_dictionary_contains(word)){
+
+        # Check for 's' ending
+        word <- paste(orig_word, "s", sep = "", collapse = "")
+
+      }
+
+    }else{
+
+      word <- paste(orig_word, "s", sep = "", collapse = "") # Ends in other letters
+
     }
 
-    if(!word %in% checker)
-    {
-        # Fail-safe
-        word <- paste(orig.word,"s",sep="",collapse="")
+  }
 
-        if(word %in% checker)
-        {return(word)
-        }else{return(orig.word)}
+  # Final gate: a word recognized by the COCA dictionary or hunspell is returned; otherwise
+  # the "+s" and "+es" forms are tried ("virus" to "viruses") before the original word is returned
+  if(!word_is_recognized(word)){
 
-    }else{return(word)}
+    # Try adding 's'
+    word_with_s <- paste(orig_word, "s", sep = "", collapse = "")
+
+    # Check for recognized word
+    if(word_is_recognized(word_with_s)){
+
+      return(word_with_s) # Return form with s
+
+    }
+
+    # Try adding 'es'
+    word_with_es <- paste(orig_word, "es", sep = "", collapse = "")
+
+    # Check for recognized word
+    if(word_is_recognized(word_with_es)){
+
+      return(word_with_es) # Return form with es
+
+    }
+
+    # Return original word
+    return(orig_word)
+
+  }else{
+
+    return(word) # Recognized word
+
+  }
+
 }
-#----
+
+#' @noRd
+# Pluralize errors ----
+# Up-front validation for `pluralize()`
+# Updated 14.10.2026
+pluralize_errors <- function(
+    word # word to pluralize
+)
+{
+
+  # Check word type
+  typeof_error(word, "character", "pluralize")
+
+  # Check word length
+  length_error(word, 1, "pluralize")
+
+  # Check word for missing
+  na_error(word, "pluralize")
+
+}

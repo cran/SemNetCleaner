@@ -1,4 +1,43 @@
+#' @noRd
+# Additional irregular singular forms (no plural counterpart; the suffix rules would mishandle them)
+additional_irregular_singulars <- c(
+  valves = "valve", trees = "tree", scribbles = "scribble", peduncles = "peduncle",
+  mallees = "mallee", panicles = "panicle", ridges = "ridge", petioles = "petiole",
+  angles = "angle", bristles = "bristle", edges = "edge", fissures = "fissure",
+  sutures = "suture", occurrences = "occurrence", bees = "bee", asses = "ass"
+)
+
+#' @noRd
+# Cache of the irregular singular forms: the reversed `irregular_plurals` table plus the
+# extra entries above, built on first use so that file load order does not matter
+# Updated 14.10.2026
+# Cache irregular singular forms
+.irregular_singulars_cache <- new.env(parent = emptyenv())
+
+# Get irregular singulars ----
+# Get irregular singular forms
+# Updated 14.10.2026
+get_irregular_singulars <- function()
+{
+
+  # Check for cached value
+  if(is.null(.irregular_singulars_cache$value)){
+
+    # Reverse plural table and add extra forms
+    .irregular_singulars_cache$value <- c(
+      setNames(names(irregular_plurals), irregular_plurals),
+      additional_irregular_singulars
+    )
+
+  }
+
+  # Return irregular singular forms
+  return(.irregular_singulars_cache$value)
+
+}
+
 #' Converts Words to their Singular Form
+#'
 #' @description A function to change words to their singular form.
 #' The rules for converting words to their singular forms
 #' are based on the \strong{\emph{inverse}} of the grammar rules.
@@ -59,239 +98,358 @@
 #' @author Alexander Christensen <alexpaulchristensen@gmail.com>
 #'
 #' @export
-#Singularize
-# Updated 12.16.2021
-singularize <- function(word, dictionary = TRUE)
+# Singularize ----
+# Converts a word to its singular: irregular words come from the reversed
+# `irregular_plurals` table plus the extra entries, the rest from suffix rules; with
+# `dictionary = TRUE` the result must be a recognized word, otherwise the original word
+# is returned
+# Updated 14.10.2026
+singularize <- function(
+    word, # word to singularize
+    dictionary = TRUE # require the result to be a recognized word
+)
 {
-    #check for multiple words
-    spl <- unlist(strsplit(word, " "))
 
-    if(length(spl) > 1)
-    {
-        word <- spl[length(spl)]
-        multiple <- TRUE
-    }else{multiple <- FALSE}
+  # Check for errors
+  singularize_errors(word, dictionary)
 
-    #original word
-    orig.word <- word
+  # Check for multiple words
+  split_words <- unlist(strsplit(word, " "))
 
-    #general dictionary to check against
-    checker <- SemNetDictionaries::coca.dictionary
+  # Check for multiple words
+  if(length(split_words) > 1){
 
-    #changed
-    chn <- FALSE
+    # Use last word
+    word <- split_words[length(split_words)]
 
-    #irregular cases
-    word <- switch(
-        word,
-        children = "child",
-        geese = "goose",
-        men = "man",
-        women = "woman",
-        teeth = "tooth",
-        feet = "foot",
-        mice = "mouse",
-        people = "person",
-        lice = "louse",
-        valves = "valve",
-        trees = "tree",
-        scribbles = "scribble",
-        peduncles = "peduncle",
-        mallees = "mallee",
-        panicles = "panicle",
-        ridges = "ridge",
-        petioles = "petiole",
-        angles = "angle",
-        bristles = "bristle",
-        edges = "edge",
-        fissures = "fissure",
-        sutures = "suture",
-        occurrences = "occurrence",
-        bees = "bee",
-        asses = "ass"
-    )
+    # Flag multiple words
+    multiple <- TRUE
 
-    if(is.null(word))
-    {word <- orig.word
-    }else{chn <- TRUE}
+  }else{
 
-    ## last letter
-    last.lets <- substr(word,nchar(word),nchar(word))
+    multiple <- FALSE # Single word
 
-    if(!chn)
-    {
-        if(any(last.lets == c("s","i","a")))
-        {
-            if(last.lets == "s")
-            {
-                #remove 's'
-                word <- substr(word,1,nchar(word)-1)
+  }
 
-                chn <- TRUE
+  # Original word
+  orig_word <- word
 
-                if(!word %in% checker)
-                {
-                    word <- orig.word
-                    chn <- FALSE
-                }
+  # Irregular cases
+  matched <- unname(get_irregular_singulars()[word])
 
-            }else if(last.lets == "i")
-            {
-                #remove 'i'
-                word <- substr(word,1,nchar(word)-1)
-                #add 'us'
-                word <- paste(word,"us",sep="",collapse="")
+  # Find irregular matches
+  chn <- !is.na(matched)
 
-                chn <- TRUE
+  # Check for irregular match
+  if(chn){
 
-                if(!word %in% checker)
-                {
-                    word <- orig.word
-                    chn <- FALSE
-                }
+    # Trust the curated irregular table regardless of `dictionary` (its entries may not be in a dictionary)
+    word <- matched
 
-            }else if(last.lets == "a")
-            {
-                #remove 'a'
-                word <- substr(word,1,nchar(word)-1)
-                #add 'on'
-                word <- paste(word,"on",sep="",collapse="")
+    # Check for multiple words
+    if(multiple){
 
-                chn <- TRUE
+      # Replace last word
+      split_words[length(split_words)] <- word
 
-                if(!word %in% checker)
-                {
-                    word <- orig.word
-                    chn <- FALSE
-                }
-
-            }
-        }
+      # Rejoin words
+      word <- paste(split_words, collapse = " ")
 
     }
 
-    ## last two letters
-    last.lets <- substr(word,nchar(word)-1,nchar(word))
+    # Return irregular singular
+    return(word)
 
-    if(!chn)
-    {
-        if(last.lets == "es")
-        {
-            #remove 'es'
-            word <- substr(word,1,nchar(word)-2)
+  }
 
-            chn <- TRUE
+  ## Last letter
+  last_letter <- substr(word, nchar(word), nchar(word))
 
-            if(!word %in% checker)
-            {
-                #add 'is'
-                word <- paste(word,"is",sep="",collapse="")
-            }
+  # chn is always FALSE past the early return above -- no longer wrapped
+  # in `if(!chn)`, which was otherwise always TRUE here
+  if(any(last_letter == c("s", "i", "a"))){
 
-            if(!word %in% checker)
-            {
-                word <- orig.word
-                chn <- FALSE
-            }
-        }
+    # Check for 's' ending
+    if(last_letter == "s"){
+
+      # Remove 's'
+      word <- substr(word, 1, nchar(word) - 1)
+
+      # Flag change
+      chn <- TRUE
+
+      # Check whether result is a word
+      if(!coca_dictionary_contains(word)){
+
+        # Revert to original word
+        word <- orig_word
+
+        # Flag no change
+        chn <- FALSE
+
+      }
+
+    }else if(last_letter == "i"){ # Check for 'i' ending
+
+      # Remove 'i'
+      word <- substr(word, 1, nchar(word) - 1)
+
+      # Add 'us'
+      word <- paste(word, "us", sep = "", collapse = "")
+
+      # Flag change
+      chn <- TRUE
+
+      # Check whether result is a word
+      if(!coca_dictionary_contains(word)){
+
+        # Revert to original word
+        word <- orig_word
+
+        # Flag no change
+        chn <- FALSE
+
+      }
+
+    }else if(last_letter == "a"){ # Check for 'a' ending
+
+      # Remove 'a'
+      word <- substr(word, 1, nchar(word) - 1)
+
+      # Add 'on'
+      word <- paste(word, "on", sep = "", collapse = "")
+
+      # Flag change
+      chn <- TRUE
+
+      # Check whether result is a word
+      if(!coca_dictionary_contains(word)){
+
+        # Revert to original word
+        word <- orig_word
+
+        # Flag no change
+        chn <- FALSE
+
+      }
+
+    }
+
+  }
+
+  ## Last two letters
+  last_letters_2 <- substr(word, nchar(word) - 1, nchar(word))
+
+  # Check for no change
+  if(!chn){
+
+    # Check for 'es' ending
+    if(last_letters_2 == "es"){
+
+      # Remove 'es'
+      word <- substr(word, 1, nchar(word) - 2)
+
+      # Flag change
+      chn <- TRUE
+
+      # Check whether result is a word
+      if(!coca_dictionary_contains(word)){
+
+        # Add 'is'
+        word <- paste(word, "is", sep = "", collapse = "")
+
+      }
+
+      # Check whether result is a word
+      if(!coca_dictionary_contains(word)){
+
+        # Revert to original word
+        word <- orig_word
+
+        # Flag no change
+        chn <- FALSE
+
+      }
 
     }
 
-    ## last three letters
-    last.lets <- substr(word,nchar(word)-2,nchar(word))
+  }
 
-    if(!chn)
-    {
-        if(any(last.lets == c("ves","ies","zes","ses")))
-        {
-            if(last.lets == "ves")
-            {
-                #remove 'ves'
-                word <- substr(word,1,nchar(word)-3)
-                #add 'f'
-                word <- paste(word,"f",sep="",collapse="")
+  ## Last three letters
+  last_letters_3 <- substr(word, nchar(word) - 2, nchar(word))
 
-                if(!word %in% checker)
-                {
-                    #add 'e'
-                    word <- paste(word,"e",sep="",collapse="")
-                }
+  # Check for no change
+  if(!chn){
 
-                chn <- TRUE
+    # Check for 'ves', 'ies', 'zes', or 'ses' ending
+    if(any(last_letters_3 == c("ves", "ies", "zes", "ses"))){
 
-                if(!word %in% checker)
-                {
-                    word <- orig.word
-                    chn <- FALSE
-                }
+      # Check for 'ves' ending
+      if(last_letters_3 == "ves"){
 
-            }else if(last.lets == "ies")
-            {
-                #remove 'ies'
-                word <- substr(word,1,nchar(word)-3)
-                #add 'y'
-                word <- paste(word,"y",sep="",collapse="")
+        # Remove 'ves'
+        word <- substr(word, 1, nchar(word) - 3)
 
-                if(!word %in% checker)
-                {
-                    #check for 'ie' ending
-                    word <- substr(word,1,nchar(word)-1)
-                    word <- paste(word,"ie",sep="",collapse="")
-                }
+        # Add 'f'
+        word <- paste(word, "f", sep = "", collapse = "")
 
-                chn <- TRUE
+        # Check whether result is a word
+        if(!coca_dictionary_contains(word)){
 
-                if(!word %in% checker)
-                {
-                    word <- orig.word
-                    chn <- FALSE
-                }
+          # Add 'e'
+          word <- paste(word, "e", sep = "", collapse = "")
 
-            }else if(any(last.lets == c("zes","ses")))
-            {
-                #remove 'zes' or 'ses'
-                word <- substr(word,1,nchar(word)-3)
-                chn <- TRUE
-
-                if(!word %in% checker)
-                {
-                    word <- orig.word
-                    chn <- FALSE
-                }
-            }
         }
+
+        # Flag change
+        chn <- TRUE
+
+        # Check whether result is a word
+        if(!coca_dictionary_contains(word)){
+
+          # Revert to original word
+          word <- orig_word
+
+          # Flag no change
+          chn <- FALSE
+
+        }
+
+      }else if(last_letters_3 == "ies"){ # Check for 'ies' ending
+
+        # Remove 'ies'
+        word <- substr(word, 1, nchar(word) - 3)
+
+        # Add 'y'
+        word <- paste(word, "y", sep = "", collapse = "")
+
+        # Check whether result is a word
+        if(!coca_dictionary_contains(word)){
+
+          # Check for 'ie' ending
+          word <- substr(word, 1, nchar(word) - 1)
+
+          # Add ie ending
+          word <- paste(word, "ie", sep = "", collapse = "")
+
+        }
+
+        # Flag change
+        chn <- TRUE
+
+        # Check whether result is a word
+        if(!coca_dictionary_contains(word)){
+
+          # Revert to original word
+          word <- orig_word
+
+          # Flag no change
+          chn <- FALSE
+
+        }
+
+      }else if(any(last_letters_3 == c("zes", "ses"))){ # Check for 'zes' or 'ses' ending
+
+        # Remove 'zes' or 'ses'
+        word <- substr(word, 1, nchar(word) - 3)
+
+        # Flag change
+        chn <- TRUE
+
+        # Check whether result is a word
+        if(!coca_dictionary_contains(word)){
+
+          # Revert to original word
+          word <- orig_word
+
+          # Flag no change
+          chn <- FALSE
+
+        }
+
+      }
+
     }
 
-    #return word
-    if(isTRUE(dictionary)){
+  }
 
-        #check for word in dictionary
-        if(!word %in% checker){
-            if(isTRUE(multiple))
-            {orig.word <- paste(spl, collapse = " ")}
+  # Return word
+  if(isTRUE(dictionary)){
 
-            return(orig.word)
-        }else{
+    # Check for word in dictionary (COCA dictionary, then hunspell)
+    if(!word_is_recognized(word)){
 
-            if(multiple)
-            {
-                spl[length(spl)] <- word
-                word <- paste(spl, collapse = " ")
-            }
+      # Check for multiple words
+      if(isTRUE(multiple)){
 
-            return(word)
-        }
+        orig_word <- paste(split_words, collapse = " ") # Rejoin words
 
-    }else{
+      }
 
-        if(multiple)
-        {
-            spl[length(spl)] <- word
-            word <- paste(spl, collapse = " ")
-        }
+      # Return original word
+      return(orig_word)
 
-        return(word)
+    }else{ # Recognized word
+
+      # Check for multiple words
+      if(multiple){
+
+        # Replace last word
+        split_words[length(split_words)] <- word
+
+        # Rejoin words
+        word <- paste(split_words, collapse = " ")
+
+      }
+
+      # Return singular
+      return(word)
 
     }
+
+  }else{ # Recognition not required
+
+    # Check for multiple words
+    if(multiple){
+
+      # Replace last word
+      split_words[length(split_words)] <- word
+
+      # Rejoin words
+      word <- paste(split_words, collapse = " ")
+
+    }
+
+    # Return singular
+    return(word)
+
+  }
+
 }
-#----
+
+#' @noRd
+# Singularize errors ----
+# Up-front validation for `singularize()`
+# Updated 14.10.2026
+singularize_errors <- function(
+    word, # word to singularize
+    dictionary # require the result to be a recognized word
+)
+{
+
+  # Check word type
+  typeof_error(word, "character", "singularize")
+
+  # Check word length
+  length_error(word, 1, "singularize")
+
+  # Check word for missing
+  na_error(word, "singularize")
+
+  # Check dictionary type
+  typeof_error(dictionary, "logical", "singularize")
+
+  # Check dictionary length
+  length_error(dictionary, 1, "singularize")
+
+}
